@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -14,11 +15,13 @@ export async function GET(request: Request) {
       // Verify admin access for admin routes
       const { data: { user } } = await supabase.auth.getUser()
 
-      if (user) {
-        const { data: admin } = await supabase
+      if (user && user.email) {
+        // Use admin client to bypass RLS
+        const adminClient = createAdminClient()
+        const { data: admin } = await adminClient
           .from('admins')
           .select('id, is_active')
-          .eq('email', user.email || '')
+          .ilike('email', user.email)
           .single()
 
         if (!admin || !admin.is_active) {

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   const { data: admin } = await supabase
     .from('admins')
     .select('id, is_active')
-    .eq('email', email)
+    .ilike('email', email)
     .single()
 
   if (!admin || !admin.is_active) {

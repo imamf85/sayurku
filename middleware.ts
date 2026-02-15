@@ -1,5 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+
+// Admin client to bypass RLS for admin checks
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -38,11 +47,12 @@ export async function middleware(request: NextRequest) {
     if (!error) {
       // Check if user is admin to redirect appropriately
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: admin } = await supabase
+      if (user && user.email) {
+        const adminClient = getAdminClient()
+        const { data: admin } = await adminClient
           .from('admins')
           .select('id')
-          .eq('email', user.email || '')
+          .ilike('email', user.email)
           .single()
 
         const redirectUrl = request.nextUrl.clone()
@@ -80,10 +90,17 @@ export async function middleware(request: NextRequest) {
 
   // Admin routes protection
   if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
-    const { data: admin } = await supabase
+    if (!user?.email) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/login'
+      return NextResponse.redirect(url)
+    }
+
+    const adminClient = getAdminClient()
+    const { data: admin } = await adminClient
       .from('admins')
       .select('id, is_active')
-      .eq('email', user?.email || '')
+      .ilike('email', user.email)
       .single()
 
     if (!admin || !admin.is_active) {
