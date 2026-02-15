@@ -29,11 +29,33 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  const pathname = request.nextUrl.pathname
+
+  // Handle auth callback code from magic link (PKCE flow)
+  const code = request.nextUrl.searchParams.get('code')
+  if (code && pathname === '/') {
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      // Check if user is admin to redirect appropriately
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: admin } = await supabase
+          .from('admins')
+          .select('id')
+          .eq('email', user.email || '')
+          .single()
+
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.searchParams.delete('code')
+        redirectUrl.pathname = admin ? '/admin' : '/'
+        return NextResponse.redirect(redirectUrl)
+      }
+    }
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const pathname = request.nextUrl.pathname
 
   // Protected user routes
   const protectedUserRoutes = [
