@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Promo, Product, PromoType } from '@/types'
+import { Promo, PromoType } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { formatPrice, formatDate } from '@/lib/utils'
@@ -33,8 +33,8 @@ export default function PromosPage() {
   const { toast } = useToast()
   const supabase = createClient()
 
-  const [promos, setPromos] = useState<(Promo & { product?: Product })[]>([])
-  const [products, setProducts] = useState<Product[]>([])
+  const [promos, setPromos] = useState<(Promo & { product?: { name: string } })[]>([])
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)

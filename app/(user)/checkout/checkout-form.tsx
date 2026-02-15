@@ -164,7 +164,7 @@ export function CheckoutForm({
       if (needsProfile) {
         await supabase
           .from('profiles')
-          .update({ full_name: fullName, phone } as { full_name: string; phone: string })
+          .update({ full_name: fullName, phone })
           .eq('id', user.id)
       }
 
@@ -219,7 +219,7 @@ export function CheckoutForm({
       if (appliedVoucher) {
         await supabase
           .from('vouchers')
-          .update({ used_count: appliedVoucher.used_count + 1 } as { used_count: number })
+          .update({ used_count: appliedVoucher.used_count + 1 })
           .eq('id', appliedVoucher.id)
       }
 

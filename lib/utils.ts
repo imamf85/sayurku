@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { Unit, PromoType, Product, Promo } from '@/types'
+import { Unit, PromoType, Product, Promo, DeliverySlot } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -79,9 +79,9 @@ export function formatDateTime(date: string | Date): string {
 }
 
 export function getAvailableDeliverySlots(
-  slots: Array<{ time_start: string | null; time_end: string | null; slot_type: string }>,
+  slots: DeliverySlot[],
   isPreorder: boolean = false
-): typeof slots {
+): DeliverySlot[] {
   if (isPreorder) {
     return slots
   }
