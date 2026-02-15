@@ -20,7 +20,7 @@ export function CartActions({ item }: CartActionsProps) {
 
     const { error } = await supabase
       .from('cart_items')
-      .update({ quantity })
+      .update({ quantity } as { quantity: number })
       .eq('id', item.id)
 
     if (error) {

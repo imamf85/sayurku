@@ -52,7 +52,7 @@ export function AddToCartButton({ productId, stock, price }: AddToCartButtonProp
 
       await supabase
         .from('cart_items')
-        .update({ quantity: newQuantity })
+        .update({ quantity: newQuantity } as { quantity: number })
         .eq('id', existingItem.id)
     } else {
       await supabase.from('cart_items').insert({

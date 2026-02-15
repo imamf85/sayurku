@@ -67,7 +67,7 @@ export default function AdminsPage() {
           name: form.name,
           role: form.role,
           is_active: form.is_active,
-        })
+        } as { name: string; role: AdminRole; is_active: boolean })
         .eq('id', editingAdmin.id)
 
       if (error) {

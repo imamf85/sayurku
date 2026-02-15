@@ -47,7 +47,7 @@ export function UpdateOrderStatus({
 
     const { error } = await supabase
       .from('orders')
-      .update({ status })
+      .update({ status } as { status: OrderStatus })
       .eq('id', orderId)
 
     if (error) {
