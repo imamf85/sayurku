@@ -1,11 +1,12 @@
 'use client'
 
 import { Suspense, useEffect, useState, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2 } from 'lucide-react'
+import { Loader2, LogIn } from 'lucide-react'
+import Link from 'next/link'
 
 function GoogleIcon() {
   return (
@@ -35,8 +36,8 @@ const supabase = createClient()
 function AdminLoginContent() {
   const [loading, setLoading] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
   const hasChecked = useRef(false)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
 
@@ -74,11 +75,10 @@ function AdminLoginContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: user.email }),
         })
-        const { isAdmin } = await res.json()
+        const data = await res.json()
 
-        if (isAdmin) {
-          router.replace('/admin')
-          return
+        if (data.isAdmin) {
+          setIsAdmin(true)
         }
       }
       setCheckingAuth(false)
@@ -111,6 +111,31 @@ function AdminLoginContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    )
+  }
+
+  // User is already logged in as admin - show go to dashboard button
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-green-600 mb-2">
+              Sayurku Admin
+            </h1>
+            <p className="text-gray-600">Anda sudah masuk sebagai admin</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+            <Link href="/admin">
+              <Button className="w-full h-12 gap-3 text-base font-medium bg-green-600 hover:bg-green-700">
+                <LogIn className="h-5 w-5" />
+                Masuk ke Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
