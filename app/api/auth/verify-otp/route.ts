@@ -97,13 +97,15 @@ export async function POST(request: NextRequest) {
     // Check if user with this phone already exists in profiles
     const { data: existingProfile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, full_name')
       .eq('phone', normalizedPhone)
       .single()
 
     let userId: string
+    let needsName = true
 
     if (existingProfile) {
+      needsName = !existingProfile.full_name
       // User exists - update password
       userId = existingProfile.id
 
@@ -176,6 +178,7 @@ export async function POST(request: NextRequest) {
         access_token: signInData.session.access_token,
         refresh_token: signInData.session.refresh_token,
       },
+      needsName,
     })
   } catch (error) {
     console.error('Verify OTP error:', error)
