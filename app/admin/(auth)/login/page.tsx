@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState, useMemo } from 'react'
+import { Suspense, useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -30,15 +30,20 @@ function GoogleIcon() {
   )
 }
 
+const supabase = createClient()
+
 function AdminLoginContent() {
   const [loading, setLoading] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
+  const hasChecked = useRef(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
+    if (hasChecked.current) return
+    hasChecked.current = true
+
     const checkAuth = async () => {
       const logout = searchParams.get('logout')
       const error = searchParams.get('error')
@@ -49,15 +54,15 @@ function AdminLoginContent() {
           description: 'Email Anda tidak terdaftar sebagai admin',
           variant: 'destructive',
         })
-        router.replace('/admin/login')
         setCheckingAuth(false)
+        window.history.replaceState({}, '', '/admin/login')
         return
       }
 
       if (logout === 'true') {
         await supabase.auth.signOut()
-        router.replace('/admin/login')
         setCheckingAuth(false)
+        window.history.replaceState({}, '', '/admin/login')
         return
       }
 
@@ -80,7 +85,7 @@ function AdminLoginContent() {
     }
 
     checkAuth()
-  }, [searchParams, router, supabase, toast])
+  }, [])
 
   const handleGoogleLogin = async () => {
     setLoading(true)
