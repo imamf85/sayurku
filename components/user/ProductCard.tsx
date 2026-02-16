@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -30,6 +30,27 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
   const discountedPrice = getDiscountedPrice(product, promo)
   const hasDiscount = discountedPrice < product.price
 
+  // Check wishlist status on mount
+  useEffect(() => {
+    const checkWishlistStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('wishlists')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .single()
+
+      setIsInWishlist(!!data)
+    }
+
+    if (!initialWishlist) {
+      checkWishlistStatus()
+    }
+  }, [product.id, initialWishlist])
+
   const handleAddToCart = async () => {
     setAddingToCart(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -48,20 +69,28 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
       .eq('product_id', product.id)
       .single()
 
+    let error
     if (existingItem) {
-      await supabase
+      const result = await supabase
         .from('cart_items')
         .update({ quantity: existingItem.quantity + 1 })
         .eq('id', existingItem.id)
+      error = result.error
     } else {
-      await supabase.from('cart_items').insert({
+      const result = await supabase.from('cart_items').insert({
         user_id: user.id,
         product_id: product.id,
         quantity: 1,
       })
+      error = result.error
     }
 
-    toast({ title: 'Ditambahkan ke keranjang' })
+    if (error) {
+      toast({ title: 'Gagal', description: error.message, variant: 'destructive' })
+    } else {
+      toast({ title: 'Ditambahkan ke keranjang' })
+    }
+
     setAddingToCart(false)
     router.refresh()
   }
@@ -84,17 +113,28 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
       .eq('product_id', product.id)
       .single()
 
+    let error
     if (existingItem) {
-      await supabase.from('wishlists').delete().eq('id', existingItem.id)
-      setIsInWishlist(false)
-      toast({ title: 'Dihapus dari wishlist' })
+      const result = await supabase.from('wishlists').delete().eq('id', existingItem.id)
+      error = result.error
+      if (!error) {
+        setIsInWishlist(false)
+        toast({ title: 'Dihapus dari wishlist' })
+      }
     } else {
-      await supabase.from('wishlists').insert({
+      const result = await supabase.from('wishlists').insert({
         user_id: user.id,
         product_id: product.id,
       })
-      setIsInWishlist(true)
-      toast({ title: 'Ditambahkan ke wishlist' })
+      error = result.error
+      if (!error) {
+        setIsInWishlist(true)
+        toast({ title: 'Ditambahkan ke wishlist' })
+      }
+    }
+
+    if (error) {
+      toast({ title: 'Gagal', description: error.message, variant: 'destructive' })
     }
 
     setTogglingWishlist(false)
