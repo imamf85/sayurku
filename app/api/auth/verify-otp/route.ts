@@ -132,10 +132,12 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const email = `${normalizedPhone}@whatsapp.sayurku.local`
+
     // Generate a magic link for passwordless login
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
-      email: `${normalizedPhone}@whatsapp.sayurku.local`,
+      email,
     })
 
     if (linkError || !linkData) {
@@ -146,17 +148,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract the token from the link
-    const url = new URL(linkData.properties.action_link)
-    const token = url.searchParams.get('token')
-    const type = url.searchParams.get('type')
+    // Extract token from action link and verify server-side
+    const actionUrl = new URL(linkData.properties.action_link)
+    const token = actionUrl.searchParams.get('token')
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Gagal mendapatkan token' },
+        { status: 500 }
+      )
+    }
+
+    // Verify OTP on server to get session
+    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'magiclink',
+    })
+
+    if (sessionError || !sessionData.session) {
+      console.error('Session error:', sessionError)
+      return NextResponse.json(
+        { error: 'Gagal membuat sesi' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Verifikasi berhasil',
-      token,
-      type,
-      userId,
+      session: {
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
+      },
     })
   } catch (error) {
     console.error('Verify OTP error:', error)

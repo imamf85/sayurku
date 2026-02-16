@@ -86,16 +86,17 @@ function LoginContent() {
         return
       }
 
-      // Verify the token with Supabase
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        token_hash: data.token,
-        type: data.type,
+      // Set session from server response
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
       })
 
-      if (verifyError) {
+      if (sessionError) {
+        console.error('Session error:', sessionError)
         toast({
           title: 'Error',
-          description: 'Gagal memverifikasi sesi',
+          description: 'Gagal menyimpan sesi',
           variant: 'destructive',
         })
         setLoading(false)
