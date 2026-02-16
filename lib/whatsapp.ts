@@ -101,3 +101,12 @@ Jumlah Item: ${itemCount}
 
 Silakan cek admin panel untuk detail.`
 }
+
+export function formatOtpMessage(otp: string): string {
+  return `*Kode OTP Sayurku*
+
+Kode verifikasi Anda: *${otp}*
+
+Kode ini berlaku selama 10 menit.
+Jangan bagikan kode ini kepada siapapun.`
+}

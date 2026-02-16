@@ -14,6 +14,16 @@ export type AdminRole = 'super_admin' | 'admin'
 
 export type DeliverySlotType = 'instant' | 'scheduled'
 
+export interface OtpVerification {
+  id: string
+  phone: string
+  otp_code: string
+  expires_at: string
+  verified: boolean
+  attempts: number
+  created_at: string
+}
+
 export interface Profile {
   id: string
   full_name: string | null

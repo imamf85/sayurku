@@ -1,50 +1,123 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Mail } from 'lucide-react'
+import { Loader2, MessageCircle, ArrowLeft } from 'lucide-react'
+
+type LoginStep = 'phone' | 'otp'
 
 function LoginContent() {
-  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [otp, setOtp] = useState('')
+  const [step, setStep] = useState<LoginStep>('phone')
   const [loading, setLoading] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
+  const [normalizedPhone, setNormalizedPhone] = useState('')
   const searchParams = useSearchParams()
+  const router = useRouter()
   const redirect = searchParams.get('redirect') || '/'
   const { toast } = useToast()
   const supabase = createClient()
 
-  const handleMagicLink = async (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${redirect}`,
-      },
-    })
+    try {
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      })
 
-    setLoading(false)
+      const data = await response.json()
 
-    if (error) {
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: data.error,
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      setNormalizedPhone(data.phone)
+      setStep('otp')
+      toast({
+        title: 'OTP Terkirim',
+        description: 'Cek WhatsApp Anda untuk kode OTP',
+      })
+    } catch {
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'Gagal mengirim OTP',
         variant: 'destructive',
       })
-      return
     }
 
-    setEmailSent(true)
-    toast({
-      title: 'Email terkirim!',
-      description: 'Cek inbox email Anda untuk link login.',
-    })
+    setLoading(false)
+  }
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalizedPhone, otp }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: data.error,
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      // Verify the token with Supabase
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: data.token,
+        type: data.type,
+      })
+
+      if (verifyError) {
+        toast({
+          title: 'Error',
+          description: 'Gagal memverifikasi sesi',
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      toast({
+        title: 'Login Berhasil',
+        description: 'Selamat datang di Sayurku!',
+      })
+
+      router.push(redirect)
+      router.refresh()
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Gagal memverifikasi OTP',
+        variant: 'destructive',
+      })
+    }
+
+    setLoading(false)
   }
 
   const handleGoogleLogin = async () => {
@@ -67,25 +140,73 @@ function LoginContent() {
     }
   }
 
-  if (emailSent) {
+  const handleBackToPhone = () => {
+    setStep('phone')
+    setOtp('')
+  }
+
+  if (step === 'otp') {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
-        <div className="w-full max-w-sm text-center">
-          <div className="bg-white rounded-2xl p-8 shadow-sm">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8 text-green-600" />
-            </div>
-            <h1 className="text-xl font-bold mb-2">Cek Email Anda</h1>
-            <p className="text-gray-600 mb-6">
-              Kami sudah mengirim link login ke <strong>{email}</strong>
-            </p>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setEmailSent(false)}
+        <div className="w-full max-w-sm">
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <button
+              onClick={handleBackToPhone}
+              className="flex items-center text-gray-600 mb-4 hover:text-gray-900"
             >
-              Gunakan email lain
-            </Button>
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Kembali
+            </button>
+
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MessageCircle className="w-8 h-8 text-green-600" />
+            </div>
+
+            <h1 className="text-xl font-bold text-center mb-2">Masukkan Kode OTP</h1>
+            <p className="text-gray-600 text-center mb-6 text-sm">
+              Kode OTP telah dikirim ke WhatsApp<br />
+              <strong>{normalizedPhone}</strong>
+            </p>
+
+            <form onSubmit={handleVerifyOtp}>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="otp">Kode OTP</Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    required
+                    className="mt-1 text-center text-2xl tracking-widest"
+                    autoFocus
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-green-600 hover:bg-green-700"
+                  disabled={loading || otp.length !== 6}
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    'Verifikasi'
+                  )}
+                </Button>
+              </div>
+            </form>
+
+            <button
+              onClick={handleSendOtp}
+              disabled={loading}
+              className="w-full mt-4 text-sm text-green-600 hover:text-green-700"
+            >
+              Kirim ulang OTP
+            </button>
           </div>
         </div>
       </div>
@@ -143,29 +264,36 @@ function LoginContent() {
             </div>
           </div>
 
-          <form onSubmit={handleMagicLink}>
+          <form onSubmit={handleSendOtp}>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="phone">Nomor WhatsApp</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="nama@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="08xxxxxxxxxx"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                   required
                   className="mt-1"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Contoh: 081234567890
+                </p>
               </div>
               <Button
                 type="submit"
                 className="w-full h-12 bg-green-600 hover:bg-green-700"
-                disabled={loading}
+                disabled={loading || phone.length < 10}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  'Kirim Magic Link'
+                  <>
+                    <MessageCircle className="w-5 h-5 mr-2" />
+                    Kirim OTP via WhatsApp
+                  </>
                 )}
               </Button>
             </div>
