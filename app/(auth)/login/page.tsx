@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,6 @@ function LoginContent() {
   const [fullName, setFullName] = useState('')
   const [savingName, setSavingName] = useState(false)
   const searchParams = useSearchParams()
-  const router = useRouter()
   const redirect = searchParams.get('redirect') || '/'
   const { toast } = useToast()
   const supabase = createClient()
@@ -125,8 +124,8 @@ function LoginContent() {
         description: 'Selamat datang di Sayurku!',
       })
 
-      router.push(redirect)
-      router.refresh()
+      // Use window.location for reliable redirect on mobile
+      window.location.href = redirect
     } catch {
       toast({
         title: 'Error',
@@ -177,8 +176,8 @@ function LoginContent() {
       })
 
       setShowNameModal(false)
-      router.push(redirect)
-      router.refresh()
+      // Use window.location for reliable redirect on mobile
+      window.location.href = redirect
     } catch {
       toast({
         title: 'Error',
