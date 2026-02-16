@@ -17,14 +17,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Category } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { slugify } from '@/lib/utils'
 
 export default function CategoriesPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,12 +42,16 @@ export default function CategoriesPage() {
   }, [])
 
   const loadCategories = async () => {
-    const { data } = await supabase
-      .from('categories')
-      .select('*')
-      .order('sort_order')
+    try {
+      const res = await fetch('/api/admin/categories')
+      const data = await res.json()
 
-    setCategories(data || [])
+      if (res.ok) {
+        setCategories(data || [])
+      }
+    } catch (error) {
+      console.error('Failed to load categories:', error)
+    }
     setLoading(false)
   }
 
@@ -65,29 +67,26 @@ export default function CategoriesPage() {
     e.preventDefault()
     setSaving(true)
 
-    if (editingCategory) {
-      const { error } = await supabase
-        .from('categories')
-        .update(form)
-        .eq('id', editingCategory.id)
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: editingCategory ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingCategory ? { id: editingCategory.id, ...form } : form),
+      })
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
         setSaving(false)
         return
       }
 
-      toast({ title: 'Kategori berhasil diupdate' })
-    } else {
-      const { error } = await supabase.from('categories').insert(form)
-
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
-        setSaving(false)
-        return
-      }
-
-      toast({ title: 'Kategori berhasil ditambahkan' })
+      toast({ title: editingCategory ? 'Kategori berhasil diupdate' : 'Kategori berhasil ditambahkan' })
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
+      setSaving(false)
+      return
     }
 
     setSaving(false)
@@ -111,15 +110,23 @@ export default function CategoriesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Hapus kategori ini?')) return
 
-    const { error } = await supabase.from('categories').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/admin/categories?id=${id}`, {
+        method: 'DELETE',
+      })
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-      return
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
+        return
+      }
+
+      toast({ title: 'Kategori berhasil dihapus' })
+      loadCategories()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
     }
-
-    toast({ title: 'Kategori berhasil dihapus' })
-    loadCategories()
   }
 
   const resetForm = () => {

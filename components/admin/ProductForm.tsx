@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Product, Category, Unit } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { slugify } from '@/lib/utils'
 
@@ -37,7 +36,6 @@ const units: { value: Unit; label: string }[] = [
 export function ProductForm({ product, categories }: ProductFormProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
   const isEdit = !!product
 
   const [loading, setLoading] = useState(false)
@@ -83,41 +81,36 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       preorder_days: form.is_preorder ? parseInt(form.preorder_days) : null,
     }
 
-    if (isEdit) {
-      const { error } = await supabase
-        .from('products')
-        .update(payload)
-        .eq('id', product.id)
+    try {
+      const res = await fetch('/api/admin/products', {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isEdit ? { id: product.id, ...payload } : payload),
+      })
 
-      if (error) {
+      const data = await res.json()
+
+      if (!res.ok) {
         toast({
           title: 'Error',
-          description: error.message,
+          description: data.error,
           variant: 'destructive',
         })
         setLoading(false)
         return
       }
 
-      toast({ title: 'Produk berhasil diupdate' })
-    } else {
-      const { error } = await supabase.from('products').insert(payload)
-
-      if (error) {
-        toast({
-          title: 'Error',
-          description: error.message,
-          variant: 'destructive',
-        })
-        setLoading(false)
-        return
-      }
-
-      toast({ title: 'Produk berhasil ditambahkan' })
+      toast({ title: isEdit ? 'Produk berhasil diupdate' : 'Produk berhasil ditambahkan' })
+      router.push('/admin/products')
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Terjadi kesalahan',
+        variant: 'destructive',
+      })
+      setLoading(false)
     }
-
-    router.push('/admin/products')
-    router.refresh()
   }
 
   return (

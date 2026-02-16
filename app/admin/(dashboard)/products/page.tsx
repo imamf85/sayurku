@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Pencil } from 'lucide-react'
 import { formatPrice, formatUnit } from '@/lib/utils'
 
 export default async function ProductsPage() {
-  const supabase = createClient()
+  const supabase = createAdminClient()
 
   const { data: products } = await supabase
     .from('products')
