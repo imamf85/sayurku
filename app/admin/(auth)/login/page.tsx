@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -36,7 +36,7 @@ function AdminLoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -80,7 +80,7 @@ function AdminLoginContent() {
     }
 
     checkAuth()
-  }, [searchParams, supabase.auth, router, supabase, toast])
+  }, [searchParams, router, supabase, toast])
 
   const handleGoogleLogin = async () => {
     setLoading(true)
