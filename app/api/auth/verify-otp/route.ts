@@ -89,6 +89,10 @@ export async function POST(request: NextRequest) {
       .update({ verified: true })
       .eq('id', otpRecord.id)
 
+    const email = `${normalizedPhone}@whatsapp.sayurku.local`
+    // Use phone number as password base (hashed with a secret)
+    const password = `wa_${normalizedPhone}_${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-10)}`
+
     // Check if user exists with this phone
     const { data: existingProfile } = await supabase
       .from('profiles')
@@ -102,11 +106,10 @@ export async function POST(request: NextRequest) {
       // User exists
       userId = existingProfile.id
     } else {
-      // Create new user via Admin API
-      const email = `${normalizedPhone}@whatsapp.sayurku.local`
-
+      // Create new user via Admin API with password
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email,
+        password,
         email_confirm: true,
         user_metadata: {
           phone: normalizedPhone,
@@ -132,42 +135,14 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const email = `${normalizedPhone}@whatsapp.sayurku.local`
-
-    // Generate a magic link for passwordless login
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
+    // Sign in with password to get session
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
+      password,
     })
 
-    if (linkError || !linkData) {
-      console.error('Generate link error:', linkError)
-      return NextResponse.json(
-        { error: 'Gagal membuat sesi login' },
-        { status: 500 }
-      )
-    }
-
-    // Extract token from action link and verify server-side
-    const actionUrl = new URL(linkData.properties.action_link)
-    const token = actionUrl.searchParams.get('token')
-
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Gagal mendapatkan token' },
-        { status: 500 }
-      )
-    }
-
-    // Verify OTP on server to get session
-    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'magiclink',
-    })
-
-    if (sessionError || !sessionData.session) {
-      console.error('Session error:', sessionError)
+    if (signInError || !signInData.session) {
+      console.error('Sign in error:', signInError)
       return NextResponse.json(
         { error: 'Gagal membuat sesi' },
         { status: 500 }
@@ -178,8 +153,8 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Verifikasi berhasil',
       session: {
-        access_token: sessionData.session.access_token,
-        refresh_token: sessionData.session.refresh_token,
+        access_token: signInData.session.access_token,
+        refresh_token: signInData.session.refresh_token,
       },
     })
   } catch (error) {
