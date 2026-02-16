@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@supabase/supabase-js'
 
 const MAX_ATTEMPTS = 5
 
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
     // Use phone number as password base (hashed with a secret)
     const password = `wa_${normalizedPhone}_${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-10)}`
 
-    // Check if user exists with this phone
+    // Check if user with this phone already exists in profiles
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id')
@@ -103,10 +104,23 @@ export async function POST(request: NextRequest) {
     let userId: string
 
     if (existingProfile) {
-      // User exists
+      // User exists - update password
       userId = existingProfile.id
+
+      const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+        password,
+        email, // Also ensure email is set correctly
+      })
+
+      if (updateError) {
+        console.error('Update user error:', updateError)
+        return NextResponse.json(
+          { error: 'Gagal update akun: ' + updateError.message },
+          { status: 500 }
+        )
+      }
     } else {
-      // Create new user via Admin API with password
+      // Create new user
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email,
         password,
@@ -120,14 +134,14 @@ export async function POST(request: NextRequest) {
       if (createError || !newUser.user) {
         console.error('Create user error:', createError)
         return NextResponse.json(
-          { error: 'Gagal membuat akun' },
+          { error: 'Gagal membuat akun: ' + createError?.message },
           { status: 500 }
         )
       }
 
       userId = newUser.user.id
 
-      // Create profile
+      // Create profile for new user
       await supabase.from('profiles').insert({
         id: userId,
         phone: normalizedPhone,
@@ -135,8 +149,14 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Create a regular client for sign in (not admin client)
+    const authClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
     // Sign in with password to get session
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
       email,
       password,
     })
@@ -144,7 +164,7 @@ export async function POST(request: NextRequest) {
     if (signInError || !signInData.session) {
       console.error('Sign in error:', signInError)
       return NextResponse.json(
-        { error: 'Gagal membuat sesi' },
+        { error: 'Gagal membuat sesi: ' + signInError?.message },
         { status: 500 }
       )
     }
