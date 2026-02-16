@@ -183,8 +183,10 @@ export function CheckoutForm({
           address_snapshot: {
             label: selectedAddress.label,
             address: selectedAddress.address,
-            district: selectedAddress.district,
+            province: selectedAddress.province || '',
             city: selectedAddress.city,
+            district: selectedAddress.district,
+            village: selectedAddress.village || '',
             postal_code: selectedAddress.postal_code,
             notes: selectedAddress.notes,
           },
@@ -289,7 +291,9 @@ export function CheckoutForm({
               <p className="font-medium">{selectedAddress.label}</p>
               <p className="text-sm text-gray-600">{selectedAddress.address}</p>
               <p className="text-sm text-gray-600">
-                {selectedAddress.district}, {selectedAddress.city} {selectedAddress.postal_code}
+                {selectedAddress.village && `${selectedAddress.village}, `}
+                {selectedAddress.district}, {selectedAddress.city}
+                {selectedAddress.province && `, ${selectedAddress.province}`} {selectedAddress.postal_code}
               </p>
               {selectedAddress.notes && (
                 <p className="text-sm text-gray-500 mt-1">

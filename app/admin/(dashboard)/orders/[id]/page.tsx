@@ -73,7 +73,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             <p className="font-medium">{order.address_snapshot.label}</p>
             <p className="text-gray-600">{order.address_snapshot.address}</p>
             <p className="text-gray-600">
-              {order.address_snapshot.district}, {order.address_snapshot.city}{' '}
+              {order.address_snapshot.village && `${order.address_snapshot.village}, `}
+              {order.address_snapshot.district}, {order.address_snapshot.city}
+              {order.address_snapshot.province && `, ${order.address_snapshot.province}`}{' '}
               {order.address_snapshot.postal_code}
             </p>
             {order.address_snapshot.notes && (

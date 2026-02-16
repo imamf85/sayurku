@@ -41,7 +41,9 @@ export default async function AddressesPage() {
               </div>
               <p className="text-sm text-gray-600">{address.address}</p>
               <p className="text-sm text-gray-600">
-                {address.district}, {address.city} {address.postal_code}
+                {address.village && `${address.village}, `}
+                {address.district}, {address.city}
+                {address.province && `, ${address.province}`} {address.postal_code}
               </p>
               {address.notes && (
                 <p className="text-sm text-gray-500 mt-1">

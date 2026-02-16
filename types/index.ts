@@ -37,8 +37,10 @@ export interface Address {
   user_id: string
   label: string
   address: string
-  district: string
+  province: string
   city: string
+  district: string
+  village: string
   postal_code: string
   notes: string | null
   is_default: boolean
@@ -131,8 +133,10 @@ export interface Wishlist {
 export interface AddressSnapshot {
   label: string
   address: string
-  district: string
+  province: string
   city: string
+  district: string
+  village: string
   postal_code: string
   notes: string | null
 }

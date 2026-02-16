@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Plus, Loader2 } from 'lucide-react'
+import { Check, Plus, Loader2, ChevronDown } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,13 @@ import { Address } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import {
+  Region,
+  getProvinces,
+  getCities,
+  getDistricts,
+  getVillages,
+} from '@/lib/indonesia-regions'
 
 interface AddressDialogProps {
   open: boolean
@@ -39,14 +46,139 @@ export function AddressDialog({
 
   const [showForm, setShowForm] = useState(addresses.length === 0)
   const [loading, setLoading] = useState(false)
+
+  // Region data
+  const [provinces, setProvinces] = useState<Region[]>([])
+  const [cities, setCities] = useState<Region[]>([])
+  const [districts, setDistricts] = useState<Region[]>([])
+  const [villages, setVillages] = useState<Region[]>([])
+
+  // Loading states
+  const [loadingProvinces, setLoadingProvinces] = useState(false)
+  const [loadingCities, setLoadingCities] = useState(false)
+  const [loadingDistricts, setLoadingDistricts] = useState(false)
+  const [loadingVillages, setLoadingVillages] = useState(false)
+
+  // Selected IDs
+  const [selectedProvinceId, setSelectedProvinceId] = useState('')
+  const [selectedCityId, setSelectedCityId] = useState('')
+  const [selectedDistrictId, setSelectedDistrictId] = useState('')
+
   const [form, setForm] = useState({
     label: '',
     address: '',
-    district: '',
+    province: '',
     city: '',
+    district: '',
+    village: '',
     postal_code: '',
     notes: '',
   })
+
+  // Load provinces when form is shown
+  useEffect(() => {
+    if (showForm && provinces.length === 0) {
+      setLoadingProvinces(true)
+      getProvinces().then((data) => {
+        setProvinces(data)
+        setLoadingProvinces(false)
+      })
+    }
+  }, [showForm, provinces.length])
+
+  // Load cities when province changes
+  useEffect(() => {
+    if (selectedProvinceId) {
+      setLoadingCities(true)
+      setCities([])
+      setDistricts([])
+      setVillages([])
+      setSelectedCityId('')
+      setSelectedDistrictId('')
+      setForm((f) => ({ ...f, city: '', district: '', village: '' }))
+
+      getCities(selectedProvinceId).then((data) => {
+        setCities(data)
+        setLoadingCities(false)
+      })
+    }
+  }, [selectedProvinceId])
+
+  // Load districts when city changes
+  useEffect(() => {
+    if (selectedCityId) {
+      setLoadingDistricts(true)
+      setDistricts([])
+      setVillages([])
+      setSelectedDistrictId('')
+      setForm((f) => ({ ...f, district: '', village: '' }))
+
+      getDistricts(selectedCityId).then((data) => {
+        setDistricts(data)
+        setLoadingDistricts(false)
+      })
+    }
+  }, [selectedCityId])
+
+  // Load villages when district changes
+  useEffect(() => {
+    if (selectedDistrictId) {
+      setLoadingVillages(true)
+      setVillages([])
+      setForm((f) => ({ ...f, village: '' }))
+
+      getVillages(selectedDistrictId).then((data) => {
+        setVillages(data)
+        setLoadingVillages(false)
+      })
+    }
+  }, [selectedDistrictId])
+
+  const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const provinceId = e.target.value
+    const province = provinces.find((p) => p.id === provinceId)
+    setSelectedProvinceId(provinceId)
+    setForm({ ...form, province: province?.name || '' })
+  }
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const cityId = e.target.value
+    const city = cities.find((c) => c.id === cityId)
+    setSelectedCityId(cityId)
+    setForm({ ...form, city: city?.name || '' })
+  }
+
+  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const districtId = e.target.value
+    const district = districts.find((d) => d.id === districtId)
+    setSelectedDistrictId(districtId)
+    setForm({ ...form, district: district?.name || '' })
+  }
+
+  const handleVillageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const villageId = e.target.value
+    const village = villages.find((v) => v.id === villageId)
+    setForm({ ...form, village: village?.name || '' })
+  }
+
+  const resetForm = () => {
+    setForm({
+      label: '',
+      address: '',
+      province: '',
+      city: '',
+      district: '',
+      village: '',
+      postal_code: '',
+      notes: '',
+    })
+    setSelectedProvinceId('')
+    setSelectedCityId('')
+    setSelectedDistrictId('')
+    setCities([])
+    setDistricts([])
+    setVillages([])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,19 +219,15 @@ export function AddressDialog({
     router.refresh()
     setLoading(false)
     setShowForm(false)
-    setForm({
-      label: '',
-      address: '',
-      district: '',
-      city: '',
-      postal_code: '',
-      notes: '',
-    })
+    resetForm()
   }
+
+  const selectClassName =
+    'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {showForm ? 'Tambah Alamat Baru' : 'Pilih Alamat'}
@@ -118,6 +246,7 @@ export function AddressDialog({
                 required
               />
             </div>
+
             <div>
               <Label htmlFor="address">Alamat Lengkap</Label>
               <Textarea
@@ -128,35 +257,120 @@ export function AddressDialog({
                 required
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="district">Kecamatan</Label>
-                <Input
-                  id="district"
-                  value={form.district}
-                  onChange={(e) => setForm({ ...form, district: e.target.value })}
+
+            {/* Province */}
+            <div>
+              <Label htmlFor="province">Provinsi</Label>
+              <div className="relative">
+                <select
+                  id="province"
+                  className={selectClassName}
+                  value={selectedProvinceId}
+                  onChange={handleProvinceChange}
+                  disabled={loadingProvinces}
                   required
-                />
-              </div>
-              <div>
-                <Label htmlFor="city">Kota</Label>
-                <Input
-                  id="city"
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  required
-                />
+                >
+                  <option value="">
+                    {loadingProvinces ? 'Memuat...' : 'Pilih Provinsi'}
+                  </option>
+                  {provinces.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
               </div>
             </div>
+
+            {/* City */}
+            <div>
+              <Label htmlFor="city">Kota/Kabupaten</Label>
+              <div className="relative">
+                <select
+                  id="city"
+                  className={selectClassName}
+                  value={selectedCityId}
+                  onChange={handleCityChange}
+                  disabled={!selectedProvinceId || loadingCities}
+                  required
+                >
+                  <option value="">
+                    {loadingCities ? 'Memuat...' : 'Pilih Kota/Kabupaten'}
+                  </option>
+                  {cities.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* District */}
+            <div>
+              <Label htmlFor="district">Kecamatan</Label>
+              <div className="relative">
+                <select
+                  id="district"
+                  className={selectClassName}
+                  value={selectedDistrictId}
+                  onChange={handleDistrictChange}
+                  disabled={!selectedCityId || loadingDistricts}
+                  required
+                >
+                  <option value="">
+                    {loadingDistricts ? 'Memuat...' : 'Pilih Kecamatan'}
+                  </option>
+                  {districts.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Village */}
+            <div>
+              <Label htmlFor="village">Kelurahan/Desa</Label>
+              <div className="relative">
+                <select
+                  id="village"
+                  className={selectClassName}
+                  value={villages.find((v) => v.name === form.village)?.id || ''}
+                  onChange={handleVillageChange}
+                  disabled={!selectedDistrictId || loadingVillages}
+                  required
+                >
+                  <option value="">
+                    {loadingVillages ? 'Memuat...' : 'Pilih Kelurahan/Desa'}
+                  </option>
+                  {villages.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Postal Code */}
             <div>
               <Label htmlFor="postal_code">Kode Pos</Label>
               <Input
                 id="postal_code"
+                placeholder="Masukkan kode pos"
                 value={form.postal_code}
                 onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
                 required
               />
             </div>
+
+            {/* Notes */}
             <div>
               <Label htmlFor="notes">Patokan (Opsional)</Label>
               <Input
@@ -166,13 +380,17 @@ export function AddressDialog({
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </div>
+
             <div className="flex gap-2">
               {addresses.length > 0 && (
                 <Button
                   type="button"
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    setShowForm(false)
+                    resetForm()
+                  }}
                 >
                   Batal
                 </Button>
@@ -204,7 +422,9 @@ export function AddressDialog({
                     <p className="font-medium">{address.label}</p>
                     <p className="text-sm text-gray-600 mt-1">{address.address}</p>
                     <p className="text-sm text-gray-600">
-                      {address.district}, {address.city} {address.postal_code}
+                      {address.village && `${address.village}, `}
+                      {address.district}, {address.city}
+                      {address.province && `, ${address.province}`} {address.postal_code}
                     </p>
                   </div>
                   {selectedAddress?.id === address.id && (
