@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Sidebar } from '@/components/admin/Sidebar'
 
 export default async function AdminLayout({
@@ -11,14 +12,16 @@ export default async function AdminLayout({
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
+  if (!user?.email) {
     redirect('/admin/login')
   }
 
-  const { data: admin } = await supabase
+  // Use admin client to bypass RLS for admin check
+  const adminClient = createAdminClient()
+  const { data: admin } = await adminClient
     .from('admins')
     .select('*')
-    .eq('email', user.email)
+    .ilike('email', user.email)
     .eq('is_active', true)
     .single()
 
