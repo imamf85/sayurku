@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { StatsCard } from '@/components/admin/StatsCard'
 import { OrderTable } from '@/components/admin/OrderTable'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -6,7 +6,7 @@ import { Package, ShoppingCart, Users, DollarSign } from 'lucide-react'
 import { formatPrice } from '@/lib/utils'
 
 export default async function AdminDashboard() {
-  const supabase = createClient()
+  const supabase = createAdminClient()
 
   const [productsRes, ordersRes, usersRes, revenueRes, recentOrdersRes] =
     await Promise.all([

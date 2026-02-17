@@ -23,12 +23,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { DeliverySlot, DeliverySlotType } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 
 export default function DeliverySlotsPage() {
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [slots, setSlots] = useState<DeliverySlot[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,12 +47,15 @@ export default function DeliverySlotsPage() {
   }, [])
 
   const loadSlots = async () => {
-    const { data } = await supabase
-      .from('delivery_slots')
-      .select('*')
-      .order('sort_order')
-
-    setSlots(data || [])
+    try {
+      const res = await fetch('/api/admin/delivery-slots')
+      if (res.ok) {
+        const data = await res.json()
+        setSlots(data)
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Gagal memuat data', variant: 'destructive' })
+    }
     setLoading(false)
   }
 
@@ -71,35 +72,34 @@ export default function DeliverySlotsPage() {
       is_active: form.is_active,
     }
 
-    if (editingSlot) {
-      const { error } = await supabase
-        .from('delivery_slots')
-        .update(payload)
-        .eq('id', editingSlot.id)
+    try {
+      const url = '/api/admin/delivery-slots'
+      const method = editingSlot ? 'PUT' : 'POST'
+      const body = editingSlot ? { id: editingSlot.id, ...payload } : payload
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
         setSaving(false)
         return
       }
 
-      toast({ title: 'Slot pengiriman berhasil diupdate' })
-    } else {
-      const { error } = await supabase.from('delivery_slots').insert(payload)
-
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
-        setSaving(false)
-        return
-      }
-
-      toast({ title: 'Slot pengiriman berhasil ditambahkan' })
+      toast({ title: editingSlot ? 'Slot pengiriman berhasil diupdate' : 'Slot pengiriman berhasil ditambahkan' })
+      setSaving(false)
+      setDialogOpen(false)
+      resetForm()
+      loadSlots()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
+      setSaving(false)
     }
-
-    setSaving(false)
-    setDialogOpen(false)
-    resetForm()
-    loadSlots()
   }
 
   const handleEdit = (slot: DeliverySlot) => {
@@ -118,15 +118,20 @@ export default function DeliverySlotsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Hapus slot pengiriman ini?')) return
 
-    const { error } = await supabase.from('delivery_slots').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/admin/delivery-slots?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-      return
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
+        return
+      }
+
+      toast({ title: 'Slot pengiriman berhasil dihapus' })
+      loadSlots()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
     }
-
-    toast({ title: 'Slot pengiriman berhasil dihapus' })
-    loadSlots()
   }
 
   const resetForm = () => {

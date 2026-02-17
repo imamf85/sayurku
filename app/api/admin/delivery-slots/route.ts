@@ -30,9 +30,9 @@ export async function GET() {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
-    .select('*, category:categories(name)')
-    .order('created_at', { ascending: false })
+    .from('delivery_slots')
+    .select('*')
+    .order('sort_order')
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('delivery_slots')
     .insert(body)
     .select()
     .single()
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('delivery_slots')
     .update(updateData)
     .eq('id', id)
     .select()
@@ -103,7 +103,7 @@ export async function DELETE(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { error } = await adminClient
-    .from('products')
+    .from('delivery_slots')
     .delete()
     .eq('id', id)
 

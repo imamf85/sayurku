@@ -23,13 +23,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Voucher, PromoType } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { formatPrice, formatDate } from '@/lib/utils'
 
 export default function VouchersPage() {
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [vouchers, setVouchers] = useState<Voucher[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,12 +51,15 @@ export default function VouchersPage() {
   }, [])
 
   const loadVouchers = async () => {
-    const { data } = await supabase
-      .from('vouchers')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    setVouchers(data || [])
+    try {
+      const res = await fetch('/api/admin/vouchers')
+      if (res.ok) {
+        const data = await res.json()
+        setVouchers(data)
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Gagal memuat data', variant: 'destructive' })
+    }
     setLoading(false)
   }
 
@@ -78,35 +79,34 @@ export default function VouchersPage() {
       is_active: form.is_active,
     }
 
-    if (editingVoucher) {
-      const { error } = await supabase
-        .from('vouchers')
-        .update(payload)
-        .eq('id', editingVoucher.id)
+    try {
+      const url = '/api/admin/vouchers'
+      const method = editingVoucher ? 'PUT' : 'POST'
+      const body = editingVoucher ? { id: editingVoucher.id, ...payload } : payload
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
         setSaving(false)
         return
       }
 
-      toast({ title: 'Voucher berhasil diupdate' })
-    } else {
-      const { error } = await supabase.from('vouchers').insert(payload)
-
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
-        setSaving(false)
-        return
-      }
-
-      toast({ title: 'Voucher berhasil ditambahkan' })
+      toast({ title: editingVoucher ? 'Voucher berhasil diupdate' : 'Voucher berhasil ditambahkan' })
+      setSaving(false)
+      setDialogOpen(false)
+      resetForm()
+      loadVouchers()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
+      setSaving(false)
     }
-
-    setSaving(false)
-    setDialogOpen(false)
-    resetForm()
-    loadVouchers()
   }
 
   const handleEdit = (voucher: Voucher) => {
@@ -128,15 +128,20 @@ export default function VouchersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Hapus voucher ini?')) return
 
-    const { error } = await supabase.from('vouchers').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/admin/vouchers?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-      return
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
+        return
+      }
+
+      toast({ title: 'Voucher berhasil dihapus' })
+      loadVouchers()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
     }
-
-    toast({ title: 'Voucher berhasil dihapus' })
-    loadVouchers()
   }
 
   const resetForm = () => {

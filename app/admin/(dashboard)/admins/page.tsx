@@ -23,12 +23,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Admin, AdminRole } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 
 export default function AdminsPage() {
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [admins, setAdmins] = useState<Admin[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,12 +45,15 @@ export default function AdminsPage() {
   }, [])
 
   const loadAdmins = async () => {
-    const { data } = await supabase
-      .from('admins')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    setAdmins(data || [])
+    try {
+      const res = await fetch('/api/admin/admins')
+      if (res.ok) {
+        const data = await res.json()
+        setAdmins(data)
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Gagal memuat data', variant: 'destructive' })
+    }
     setLoading(false)
   }
 
@@ -60,44 +61,36 @@ export default function AdminsPage() {
     e.preventDefault()
     setSaving(true)
 
-    if (editingAdmin) {
-      const { error } = await supabase
-        .from('admins')
-        .update({
-          name: form.name,
-          role: form.role,
-          is_active: form.is_active,
-        })
-        .eq('id', editingAdmin.id)
+    try {
+      const url = '/api/admin/admins'
+      const method = editingAdmin ? 'PUT' : 'POST'
+      const payload = editingAdmin
+        ? { id: editingAdmin.id, name: form.name, role: form.role, is_active: form.is_active }
+        : { email: form.email, name: form.name, role: form.role, is_active: form.is_active }
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
-        setSaving(false)
-        return
-      }
-
-      toast({ title: 'Admin berhasil diupdate' })
-    } else {
-      const { error } = await supabase.from('admins').insert({
-        email: form.email,
-        name: form.name,
-        role: form.role,
-        is_active: form.is_active,
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       })
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
         setSaving(false)
         return
       }
 
-      toast({ title: 'Admin berhasil ditambahkan' })
+      toast({ title: editingAdmin ? 'Admin berhasil diupdate' : 'Admin berhasil ditambahkan' })
+      setSaving(false)
+      setDialogOpen(false)
+      resetForm()
+      loadAdmins()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
+      setSaving(false)
     }
-
-    setSaving(false)
-    setDialogOpen(false)
-    resetForm()
-    loadAdmins()
   }
 
   const handleEdit = (admin: Admin) => {
@@ -114,15 +107,20 @@ export default function AdminsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Hapus admin ini?')) return
 
-    const { error } = await supabase.from('admins').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/admin/admins?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-      return
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
+        return
+      }
+
+      toast({ title: 'Admin berhasil dihapus' })
+      loadAdmins()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
     }
-
-    toast({ title: 'Admin berhasil dihapus' })
-    loadAdmins()
   }
 
   const resetForm = () => {

@@ -30,8 +30,8 @@ export async function GET() {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
-    .select('*, category:categories(name)')
+    .from('vouchers')
+    .select('*')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('vouchers')
     .insert(body)
     .select()
     .single()
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('vouchers')
     .update(updateData)
     .eq('id', id)
     .select()
@@ -103,7 +103,7 @@ export async function DELETE(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { error } = await adminClient
-    .from('products')
+    .from('vouchers')
     .delete()
     .eq('id', id)
 

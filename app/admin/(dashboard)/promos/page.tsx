@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,14 +23,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Promo, PromoType } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { formatPrice, formatDate } from '@/lib/utils'
 
 export default function PromosPage() {
-  const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [promos, setPromos] = useState<(Promo & { product?: { name: string } })[]>([])
   const [products, setProducts] = useState<{ id: string; name: string }[]>([])
@@ -54,16 +50,24 @@ export default function PromosPage() {
   }, [])
 
   const loadData = async () => {
-    const [promosRes, productsRes] = await Promise.all([
-      supabase
-        .from('promos')
-        .select('*, product:products(name)')
-        .order('created_at', { ascending: false }),
-      supabase.from('products').select('id, name').eq('is_active', true),
-    ])
+    try {
+      const [promosRes, productsRes] = await Promise.all([
+        fetch('/api/admin/promos'),
+        fetch('/api/admin/products'),
+      ])
 
-    setPromos(promosRes.data || [])
-    setProducts(productsRes.data || [])
+      if (promosRes.ok) {
+        const promosData = await promosRes.json()
+        setPromos(promosData)
+      }
+
+      if (productsRes.ok) {
+        const productsData = await productsRes.json()
+        setProducts(productsData.map((p: any) => ({ id: p.id, name: p.name })))
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Gagal memuat data', variant: 'destructive' })
+    }
     setLoading(false)
   }
 
@@ -81,35 +85,34 @@ export default function PromosPage() {
       is_active: form.is_active,
     }
 
-    if (editingPromo) {
-      const { error } = await supabase
-        .from('promos')
-        .update(payload)
-        .eq('id', editingPromo.id)
+    try {
+      const url = '/api/admin/promos'
+      const method = editingPromo ? 'PUT' : 'POST'
+      const body = editingPromo ? { id: editingPromo.id, ...payload } : payload
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
         setSaving(false)
         return
       }
 
-      toast({ title: 'Promo berhasil diupdate' })
-    } else {
-      const { error } = await supabase.from('promos').insert(payload)
-
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
-        setSaving(false)
-        return
-      }
-
-      toast({ title: 'Promo berhasil ditambahkan' })
+      toast({ title: editingPromo ? 'Promo berhasil diupdate' : 'Promo berhasil ditambahkan' })
+      setSaving(false)
+      setDialogOpen(false)
+      resetForm()
+      loadData()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
+      setSaving(false)
     }
-
-    setSaving(false)
-    setDialogOpen(false)
-    resetForm()
-    loadData()
   }
 
   const handleEdit = (promo: Promo) => {
@@ -129,15 +132,20 @@ export default function PromosPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Hapus promo ini?')) return
 
-    const { error } = await supabase.from('promos').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/admin/promos?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-      return
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error, variant: 'destructive' })
+        return
+      }
+
+      toast({ title: 'Promo berhasil dihapus' })
+      loadData()
+    } catch (error) {
+      toast({ title: 'Error', description: 'Terjadi kesalahan', variant: 'destructive' })
     }
-
-    toast({ title: 'Promo berhasil dihapus' })
-    loadData()
   }
 
   const resetForm = () => {

@@ -30,8 +30,8 @@ export async function GET() {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
-    .select('*, category:categories(name)')
+    .from('promos')
+    .select('*, product:products(name)')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('promos')
     .insert(body)
     .select()
     .single()
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('promos')
     .update(updateData)
     .eq('id', id)
     .select()
@@ -103,7 +103,7 @@ export async function DELETE(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { error } = await adminClient
-    .from('products')
+    .from('promos')
     .delete()
     .eq('id', id)
 

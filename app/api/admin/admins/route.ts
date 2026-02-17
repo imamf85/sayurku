@@ -13,12 +13,12 @@ async function verifyAdmin() {
   const adminClient = createAdminClient()
   const { data: admin } = await adminClient
     .from('admins')
-    .select('id')
+    .select('id, role')
     .ilike('email', user.email)
     .eq('is_active', true)
     .single()
 
-  return admin ? user : null
+  return admin ? { ...user, adminRole: admin.role } : null
 }
 
 export async function GET() {
@@ -30,8 +30,8 @@ export async function GET() {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
-    .select('*, category:categories(name)')
+    .from('admins')
+    .select('*')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('admins')
     .insert(body)
     .select()
     .single()
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
-    .from('products')
+    .from('admins')
     .update(updateData)
     .eq('id', id)
     .select()
@@ -103,7 +103,7 @@ export async function DELETE(request: NextRequest) {
   const adminClient = createAdminClient()
 
   const { error } = await adminClient
-    .from('products')
+    .from('admins')
     .delete()
     .eq('id', id)
 
