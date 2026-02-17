@@ -1,4 +1,4 @@
-const API_BASE = 'https://emsifa.github.io/api-wilayah-indonesia/api'
+const API_BASE = 'https://www.emsifa.com/api-wilayah-indonesia/api'
 
 export interface Region {
   id: string
