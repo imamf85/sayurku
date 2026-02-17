@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -18,7 +18,7 @@ interface OrderDetailPageProps {
 }
 
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
-  const supabase = createClient()
+  const supabase = createAdminClient()
 
   const { data: order } = await supabase
     .from('orders')

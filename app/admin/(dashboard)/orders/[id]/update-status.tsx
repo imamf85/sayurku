@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { OrderStatus } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 
 interface UpdateOrderStatusProps {
@@ -35,7 +34,6 @@ export function UpdateOrderStatus({
 }: UpdateOrderStatusProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [status, setStatus] = useState<OrderStatus>(currentStatus)
   const [loading, setLoading] = useState(false)
@@ -45,24 +43,36 @@ export function UpdateOrderStatus({
 
     setLoading(true)
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ status })
-      .eq('id', orderId)
+    try {
+      const response = await fetch('/api/admin/orders/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status }),
+      })
 
-    if (error) {
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: data.error,
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      toast({ title: 'Status pesanan berhasil diupdate' })
+      router.refresh()
+    } catch {
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'Gagal mengupdate status',
         variant: 'destructive',
       })
-      setLoading(false)
-      return
     }
 
-    toast({ title: 'Status pesanan berhasil diupdate' })
     setLoading(false)
-    router.refresh()
   }
 
   return (
