@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         )
       }
     } else {
-      // Create new user
+      // Try to create new user
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email,
         password,
@@ -133,22 +133,65 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      if (createError || !newUser.user) {
-        console.error('Create user error:', createError)
+      if (createError) {
+        // User might exist in auth but not in profiles - try to get user by email
+        if (createError.message?.includes('already been registered')) {
+          const { data: { users } } = await supabase.auth.admin.listUsers()
+          const existingAuthUser = users?.find(u => u.email === email)
+
+          if (existingAuthUser) {
+            userId = existingAuthUser.id
+
+            // Update password
+            await supabase.auth.admin.updateUserById(userId, { password })
+
+            // Create profile if not exists
+            const { data: profileCheck } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', userId)
+              .single()
+
+            if (!profileCheck) {
+              await supabase.from('profiles').insert({
+                id: userId,
+                phone: normalizedPhone,
+                full_name: null,
+              })
+            }
+          } else {
+            console.error('Create user error:', createError)
+            return NextResponse.json(
+              { error: 'Gagal membuat akun: ' + createError.message },
+              { status: 500 }
+            )
+          }
+        } else {
+          console.error('Create user error:', createError)
+          return NextResponse.json(
+            { error: 'Gagal membuat akun: ' + createError.message },
+            { status: 500 }
+          )
+        }
+      } else if (newUser?.user) {
+        userId = newUser.user.id
+
+        // Create profile for new user
+        const { error: profileError } = await supabase.from('profiles').insert({
+          id: userId,
+          phone: normalizedPhone,
+          full_name: null,
+        })
+
+        if (profileError) {
+          console.error('Profile insert error:', profileError)
+        }
+      } else {
         return NextResponse.json(
-          { error: 'Gagal membuat akun: ' + createError?.message },
+          { error: 'Gagal membuat akun' },
           { status: 500 }
         )
       }
-
-      userId = newUser.user.id
-
-      // Create profile for new user
-      await supabase.from('profiles').insert({
-        id: userId,
-        phone: normalizedPhone,
-        full_name: null,
-      })
     }
 
     // Create a regular client for sign in (not admin client)

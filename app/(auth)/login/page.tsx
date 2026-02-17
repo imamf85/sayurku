@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -29,8 +29,20 @@ function LoginContent() {
   const [savingName, setSavingName] = useState(false)
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect') || '/'
+  const expired = searchParams.get('expired')
   const { toast } = useToast()
   const supabase = createClient()
+
+  // Show expired session message
+  useEffect(() => {
+    if (expired === '1') {
+      toast({
+        title: 'Sesi Berakhir',
+        description: 'Silakan login kembali untuk melanjutkan',
+        variant: 'destructive',
+      })
+    }
+  }, [expired, toast])
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
