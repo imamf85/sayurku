@@ -175,7 +175,8 @@ export function CheckoutForm({
         .insert({
           user_id: user.id,
           order_number: orderNumber,
-          status: 'pending_payment',
+          status: 'processing',
+          payment_method: 'cod',
           subtotal,
           discount,
           voucher_id: appliedVoucher?.id,
@@ -226,6 +227,13 @@ export function CheckoutForm({
       }
 
       await supabase.from('cart_items').delete().eq('user_id', user.id)
+
+      // Send WhatsApp notifications to user and admin
+      fetch('/api/orders/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id }),
+      }).catch(console.error) // Don't block redirect if notification fails
 
       router.push(`/payment/${order.id}`)
     } catch (error) {
