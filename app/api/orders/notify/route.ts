@@ -5,7 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { formatPrice } from '@/lib/utils'
 
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '6281217571585'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku.vercel.app'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
 
 function formatOrderMessageForUser(
   orderNumber: string,

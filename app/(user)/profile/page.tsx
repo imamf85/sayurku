@@ -9,10 +9,8 @@ import {
   MapPin,
   User,
   Phone,
-  Mail,
   Pencil,
   CheckCircle2,
-  XCircle,
 } from 'lucide-react'
 import { LogoutButton } from './logout-button'
 
@@ -38,19 +36,8 @@ export default async function ProfilePage() {
     .toUpperCase()
     .slice(0, 2) || user.email?.[0].toUpperCase()
 
-  // Determine login method and verification status
-  const isWhatsAppLogin = user.email?.endsWith('@whatsapp.sayurku.local')
-  const isGoogleLogin = user.app_metadata?.provider === 'google'
-
-  // Verification logic:
-  // - WhatsApp login: phone verified (OTP), email is placeholder (not applicable)
-  // - Google login: email verified (OAuth), phone needs verification if added
-  const phoneVerified = isWhatsAppLogin
-  const emailVerified = !isWhatsAppLogin && (isGoogleLogin || !!user.email_confirmed_at)
-
-  // Display values
-  const displayEmail = isWhatsAppLogin ? null : user.email
-  const displayPhone = profile?.phone || (isWhatsAppLogin ? user.email?.replace('@whatsapp.sayurku.local', '') : null)
+  // All users login via WhatsApp, so phone is always verified
+  const displayPhone = profile?.phone || user.email?.replace('@whatsapp.sayurku.local', '')
 
   return (
     <div className="container px-4 py-4">
@@ -76,7 +63,7 @@ export default async function ProfilePage() {
               {profile?.full_name || 'Nama belum diisi'}
             </p>
             <p className="text-sm text-gray-500 truncate">
-              {displayEmail || displayPhone}
+              {displayPhone}
             </p>
           </div>
         </div>
@@ -97,47 +84,16 @@ export default async function ProfilePage() {
             </div>
           </div>
 
-          {/* Email - only show for non-WhatsApp login */}
-          {!isWhatsAppLogin && (
-            <div className="flex items-center gap-3 p-4">
-              <Mail className="h-5 w-5 text-gray-400" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-500">Email</p>
-                  {emailVerified ? (
-                    <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Terverifikasi
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs text-orange-600 border-orange-200 bg-orange-50">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Belum verifikasi
-                    </Badge>
-                  )}
-                </div>
-                <p className="font-medium">{user.email}</p>
-              </div>
-            </div>
-          )}
-
-          {/* WhatsApp */}
+          {/* WhatsApp - always verified since user logged in via OTP */}
           <div className="flex items-center gap-3 p-4">
             <Phone className="h-5 w-5 text-gray-400" />
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm text-gray-500">WhatsApp</p>
-                {displayPhone && phoneVerified ? (
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Terverifikasi
-                  </Badge>
-                ) : displayPhone && !phoneVerified ? (
-                  <Badge variant="outline" className="text-xs text-orange-600 border-orange-200 bg-orange-50">
-                    <XCircle className="h-3 w-3 mr-1" />
-                    Belum verifikasi
-                  </Badge>
-                ) : null}
+                <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Terverifikasi
+                </Badge>
               </div>
               <p className="font-medium">
                 {displayPhone || '-'}

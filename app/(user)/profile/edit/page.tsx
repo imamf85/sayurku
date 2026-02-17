@@ -19,7 +19,6 @@ export default function EditProfilePage() {
   const [saving, setSaving] = useState(false)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
-  const [isWhatsAppLogin, setIsWhatsAppLogin] = useState(false)
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -30,9 +29,6 @@ export default function EditProfilePage() {
         return
       }
 
-      const isWaLogin = user.email?.endsWith('@whatsapp.sayurku.local') || false
-      setIsWhatsAppLogin(isWaLogin)
-
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -41,12 +37,8 @@ export default function EditProfilePage() {
 
       if (profile) {
         setFullName(profile.full_name || '')
-        // For WhatsApp login, phone is extracted from email
-        if (isWaLogin) {
-          setPhone(user.email?.replace('@whatsapp.sayurku.local', '') || '')
-        } else {
-          setPhone(profile.phone || '')
-        }
+        // Phone is extracted from email (WhatsApp login)
+        setPhone(profile.phone || user.email?.replace('@whatsapp.sayurku.local', '') || '')
       }
 
       setLoading(false)
@@ -72,18 +64,10 @@ export default function EditProfilePage() {
         return
       }
 
-      // For WhatsApp login, don't update phone (it's tied to their login)
-      const updateData: { full_name: string; phone?: string | null } = {
-        full_name: fullName.trim(),
-      }
-
-      if (!isWhatsAppLogin) {
-        updateData.phone = phone.trim() || null
-      }
-
+      // Only update name - phone is tied to WhatsApp login and cannot be changed
       const { error } = await supabase
         .from('profiles')
-        .update(updateData)
+        .update({ full_name: fullName.trim() })
         .eq('id', user.id)
 
       if (error) {
@@ -156,15 +140,12 @@ export default function EditProfilePage() {
               inputMode="numeric"
               placeholder="08xxxxxxxxxx"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
               className="mt-1"
-              disabled={isWhatsAppLogin}
+              disabled
             />
-            {isWhatsAppLogin && (
-              <p className="text-xs text-gray-500 mt-1">
-                Nomor WhatsApp tidak dapat diubah karena digunakan untuk login
-              </p>
-            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Nomor WhatsApp tidak dapat diubah karena digunakan untuk login
+            </p>
           </div>
         </div>
 
