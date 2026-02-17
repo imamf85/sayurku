@@ -95,11 +95,14 @@ export async function POST(request: NextRequest) {
     const password = `wa_${normalizedPhone}_${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-10)}`
 
     // Check if user with this phone already exists in profiles
+    // Use .maybeSingle() to avoid error when no match, and order by created_at to get the oldest one
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id, full_name')
       .eq('phone', normalizedPhone)
-      .single()
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
 
     let userId: string
     let needsName = true
@@ -109,71 +112,93 @@ export async function POST(request: NextRequest) {
       // User exists - update password
       userId = existingProfile.id
 
-      const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-        password,
-        email, // Also ensure email is set correctly
-      })
+      // Check if auth user exists
+      const { data: authUser, error: getUserError } = await supabase.auth.admin.getUserById(userId)
 
-      if (updateError) {
-        console.error('Update user error:', updateError)
-        return NextResponse.json(
-          { error: 'Gagal update akun: ' + updateError.message },
-          { status: 500 }
-        )
+      if (getUserError || !authUser?.user) {
+        // Auth user doesn't exist, create it with the existing profile's id
+        const { error: createError } = await supabase.auth.admin.createUser({
+          id: userId,
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            phone: normalizedPhone,
+            auth_provider: 'whatsapp',
+          },
+        })
+
+        if (createError) {
+          console.error('Create auth user for existing profile error:', createError)
+          return NextResponse.json(
+            { error: 'Gagal membuat akun: ' + createError.message },
+            { status: 500 }
+          )
+        }
+      } else {
+        // Auth user exists, update password and email
+        const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+          password,
+          email,
+        })
+
+        if (updateError) {
+          console.error('Update user error:', updateError)
+          return NextResponse.json(
+            { error: 'Gagal update akun: ' + updateError.message },
+            { status: 500 }
+          )
+        }
       }
     } else {
-      // Try to create new user
-      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
+      // No existing profile - check if auth user exists by email
+      const { data: { users } } = await supabase.auth.admin.listUsers()
+      const existingAuthUser = users?.find(u => u.email === email)
+
+      if (existingAuthUser) {
+        // Auth user exists but no profile
+        userId = existingAuthUser.id
+
+        // Update password
+        await supabase.auth.admin.updateUserById(userId, { password })
+
+        // Create profile for this auth user
+        const { error: profileError } = await supabase.from('profiles').insert({
+          id: userId,
           phone: normalizedPhone,
-          auth_provider: 'whatsapp',
-        },
-      })
+          full_name: null,
+        })
 
-      if (createError) {
-        // User might exist in auth but not in profiles - try to get user by email
-        if (createError.message?.includes('already been registered')) {
-          const { data: { users } } = await supabase.auth.admin.listUsers()
-          const existingAuthUser = users?.find(u => u.email === email)
+        if (profileError) {
+          console.error('Profile insert error:', profileError)
+        }
+      } else {
+        // Create new user
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            phone: normalizedPhone,
+            auth_provider: 'whatsapp',
+          },
+        })
 
-          if (existingAuthUser) {
-            userId = existingAuthUser.id
-
-            // Update password
-            await supabase.auth.admin.updateUserById(userId, { password })
-
-            // Create profile if not exists
-            const { data: profileCheck } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('id', userId)
-              .single()
-
-            if (!profileCheck) {
-              await supabase.from('profiles').insert({
-                id: userId,
-                phone: normalizedPhone,
-                full_name: null,
-              })
-            }
-          } else {
-            console.error('Create user error:', createError)
-            return NextResponse.json(
-              { error: 'Gagal membuat akun: ' + createError.message },
-              { status: 500 }
-            )
-          }
-        } else {
+        if (createError) {
           console.error('Create user error:', createError)
           return NextResponse.json(
             { error: 'Gagal membuat akun: ' + createError.message },
             { status: 500 }
           )
         }
-      } else if (newUser?.user) {
+
+        if (!newUser?.user) {
+          return NextResponse.json(
+            { error: 'Gagal membuat akun' },
+            { status: 500 }
+          )
+        }
+
         userId = newUser.user.id
 
         // Create profile for new user
@@ -186,11 +211,6 @@ export async function POST(request: NextRequest) {
         if (profileError) {
           console.error('Profile insert error:', profileError)
         }
-      } else {
-        return NextResponse.json(
-          { error: 'Gagal membuat akun' },
-          { status: 500 }
-        )
       }
     }
 
