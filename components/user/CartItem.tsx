@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Image from 'next/image'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,12 +9,30 @@ import { formatPrice, formatUnit } from '@/lib/utils'
 
 interface CartItemProps {
   item: CartItemType
-  onUpdateQuantity: (quantity: number) => void
+  onUpdateQuantity: (quantity: number) => Promise<boolean>
   onRemove: () => void
 }
 
 export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
   const product = item.product!
+  const [localQuantity, setLocalQuantity] = useState(item.quantity)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const handleQuantityChange = async (newQuantity: number) => {
+    if (newQuantity < 1 || newQuantity > product.stock || isUpdating) return
+
+    const previousQuantity = localQuantity
+    setLocalQuantity(newQuantity) // Optimistic update
+    setIsUpdating(true)
+
+    const success = await onUpdateQuantity(newQuantity)
+
+    if (!success) {
+      setLocalQuantity(previousQuantity) // Revert on error
+    }
+
+    setIsUpdating(false)
+  }
 
   return (
     <div className="flex gap-3 p-4 bg-white rounded-lg border">
@@ -47,20 +66,20 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
               variant="outline"
               size="icon"
               className="h-7 w-7"
-              onClick={() => onUpdateQuantity(item.quantity - 1)}
-              disabled={item.quantity <= 1}
+              onClick={() => handleQuantityChange(localQuantity - 1)}
+              disabled={localQuantity <= 1 || isUpdating}
             >
               <Minus className="h-3 w-3" />
             </Button>
             <span className="w-8 text-center text-sm font-medium">
-              {item.quantity}
+              {localQuantity}
             </span>
             <Button
               variant="outline"
               size="icon"
               className="h-7 w-7"
-              onClick={() => onUpdateQuantity(item.quantity + 1)}
-              disabled={item.quantity >= product.stock}
+              onClick={() => handleQuantityChange(localQuantity + 1)}
+              disabled={localQuantity >= product.stock || isUpdating}
             >
               <Plus className="h-3 w-3" />
             </Button>

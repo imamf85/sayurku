@@ -8,15 +8,16 @@ import { useToast } from '@/hooks/use-toast'
 
 interface CartActionsProps {
   item: CartItem
+  onQuantityChange?: (itemId: string, newQuantity: number) => void
 }
 
-export function CartActions({ item }: CartActionsProps) {
+export function CartActions({ item, onQuantityChange }: CartActionsProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
 
-  const handleUpdateQuantity = async (quantity: number) => {
-    if (quantity < 1) return
+  const handleUpdateQuantity = async (quantity: number): Promise<boolean> => {
+    if (quantity < 1) return false
 
     const { error } = await supabase
       .from('cart_items')
@@ -29,10 +30,12 @@ export function CartActions({ item }: CartActionsProps) {
         description: 'Gagal mengupdate quantity',
         variant: 'destructive',
       })
-      return
+      return false
     }
 
-    router.refresh()
+    // Notify parent about quantity change for total recalculation
+    onQuantityChange?.(item.id, quantity)
+    return true
   }
 
   const handleRemove = async () => {
