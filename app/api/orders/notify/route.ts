@@ -5,6 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { formatPrice } from '@/lib/utils'
 
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '6281217571585'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku.vercel.app'
 
 function formatOrderMessageForUser(
   orderNumber: string,
@@ -32,6 +33,7 @@ Terima kasih!`
 }
 
 function formatOrderMessageForAdmin(
+  orderId: string,
   orderNumber: string,
   customerName: string,
   customerPhone: string,
@@ -41,6 +43,8 @@ function formatOrderMessageForAdmin(
   deliverySlot: string,
   address: string
 ): string {
+  const orderUrl = `${APP_URL}/admin/orders/${orderId}`
+
   return `*Pesanan Baru Masuk - Sayurku*
 
 *No. Pesanan:* ${orderNumber}
@@ -55,7 +59,8 @@ Tanggal: ${deliveryDate}
 Waktu: ${deliverySlot}
 Alamat: ${address}
 
-Silakan cek admin panel untuk detail pesanan.`
+Lihat & update pesanan:
+${orderUrl}`
 }
 
 export async function POST(request: NextRequest) {
@@ -136,6 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     const adminMessage = formatOrderMessageForAdmin(
+      order.id,
       order.order_number,
       customerName,
       customerPhone,
