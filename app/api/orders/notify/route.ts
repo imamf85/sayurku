@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { formatPrice } from '@/lib/utils'
 
-const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '6287881847054'
+const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '6281217571585'
 
 function formatOrderMessageForUser(
   orderNumber: string,
@@ -80,12 +80,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Use admin client to get full order details
     const adminSupabase = createAdminClient()
 
     const { data: order, error: orderError } = await adminSupabase
       .from('orders')
-      .select('*, items:order_items(*)')
+      .select(`
+        *,
+        items:order_items(*),
+        delivery_slot:delivery_slots(id, name)
+      `)
       .eq('id', orderId)
       .eq('user_id', user.id)
       .single()
@@ -97,7 +100,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user profile for name and phone
     const { data: profile } = await adminSupabase
       .from('profiles')
       .select('full_name, phone')
@@ -107,7 +109,6 @@ export async function POST(request: NextRequest) {
     const customerName = profile?.full_name || 'Pelanggan'
     const customerPhone = profile?.phone || ''
 
-    // Format delivery date
     const deliveryDate = new Date(order.delivery_date).toLocaleDateString('id-ID', {
       weekday: 'long',
       day: 'numeric',
@@ -119,14 +120,13 @@ export async function POST(request: NextRequest) {
     const addr = order.address_snapshot
     const fullAddress = `${addr.address}, ${addr.village ? addr.village + ', ' : ''}${addr.district}, ${addr.city}${addr.province ? ', ' + addr.province : ''} ${addr.postal_code}`
 
-    // Send to user (if they have phone number)
     if (customerPhone) {
       const userMessage = formatOrderMessageForUser(
         order.order_number,
         order.total,
         order.items?.length || 0,
         deliveryDate,
-        order.delivery_slot
+        order.delivery_slot.name
       )
 
       await sendWhatsAppMessage({
@@ -135,7 +135,6 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Send to admin
     const adminMessage = formatOrderMessageForAdmin(
       order.order_number,
       customerName,
@@ -143,7 +142,7 @@ export async function POST(request: NextRequest) {
       order.total,
       order.items?.length || 0,
       deliveryDate,
-      order.delivery_slot,
+      order.delivery_slot.name,
       fullAddress
     )
 
