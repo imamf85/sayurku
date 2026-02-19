@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Sidebar } from '@/components/admin/Sidebar'
+import { SessionMonitor } from '@/components/admin/SessionMonitor'
 
 export default async function AdminLayout({
   children,
@@ -21,6 +22,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SessionMonitor />
       <Sidebar
         adminName={admin?.name || 'Admin'}
         isSuperAdmin={admin?.role === 'super_admin'}

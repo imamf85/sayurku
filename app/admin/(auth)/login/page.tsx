@@ -48,11 +48,24 @@ function AdminLoginContent() {
     const checkAuth = async () => {
       const logout = searchParams.get('logout')
       const error = searchParams.get('error')
+      const expired = searchParams.get('expired')
 
       if (error === 'not_admin') {
         toast({
           title: 'Akses ditolak',
           description: 'Email Anda tidak terdaftar sebagai admin',
+          variant: 'destructive',
+        })
+        setCheckingAuth(false)
+        window.history.replaceState({}, '', '/admin/login')
+        return
+      }
+
+      if (expired === '1') {
+        await supabase.auth.signOut()
+        toast({
+          title: 'Sesi berakhir',
+          description: 'Silakan login kembali untuk melanjutkan',
           variant: 'destructive',
         })
         setCheckingAuth(false)
