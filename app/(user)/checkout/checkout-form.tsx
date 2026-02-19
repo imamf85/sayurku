@@ -11,7 +11,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { DeliverySlotPicker } from '@/components/user/DeliverySlotPicker'
 import { CartItem, Address, Profile, DeliverySlot } from '@/types'
-import { formatPrice, generateOrderNumber } from '@/lib/utils'
+import {
+  formatPrice,
+  generateOrderNumber,
+  calculateCartItemTotal,
+  calculateBulkWeight,
+  formatBulkWeight,
+} from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { AddressDialog } from './address-dialog'
@@ -56,7 +62,7 @@ export function CheckoutForm({
   const needsProfile = !profile?.full_name || !profile?.phone
 
   const subtotal = cartItems.reduce(
-    (acc, item) => acc + (item.product?.price || 0) * item.quantity,
+    (acc, item) => acc + calculateCartItemTotal(item),
     0
   )
 
@@ -210,11 +216,12 @@ export function CheckoutForm({
           price: item.product?.price,
           unit: item.product?.unit,
           unit_value: item.product?.unit_value,
+          is_bulk_pricing: item.product?.is_bulk_pricing,
         },
         quantity: item.quantity,
         price: item.product?.price || 0,
         discount: 0,
-        subtotal: (item.product?.price || 0) * item.quantity,
+        subtotal: calculateCartItemTotal(item),
       }))
 
       await supabase.from('order_items').insert(orderItems)
@@ -370,14 +377,22 @@ export function CheckoutForm({
       <section className="bg-white rounded-lg p-4 mb-4">
         <h2 className="font-medium mb-3">Ringkasan Pesanan</h2>
         <div className="space-y-2">
-          {cartItems.map((item) => (
-            <div key={item.id} className="flex justify-between text-sm">
-              <span className="text-gray-600">
-                {item.product?.name} x{item.quantity}
-              </span>
-              <span>{formatPrice((item.product?.price || 0) * item.quantity)}</span>
-            </div>
-          ))}
+          {cartItems.map((item) => {
+            const isBulk = item.product?.is_bulk_pricing
+            const itemTotal = calculateCartItemTotal(item)
+            const displayQty = isBulk
+              ? `${formatBulkWeight(calculateBulkWeight(item.quantity, item.product?.price || 0))}`
+              : `x${item.quantity}`
+
+            return (
+              <div key={item.id} className="flex justify-between text-sm">
+                <span className="text-gray-600">
+                  {item.product?.name} {displayQty}
+                </span>
+                <span>{formatPrice(itemTotal)}</span>
+              </div>
+            )
+          })}
           <Separator className="my-2" />
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Subtotal</span>

@@ -52,6 +52,8 @@ export function ProductForm({ product, categories }: ProductFormProps) {
     is_active: product?.is_active ?? true,
     is_preorder: product?.is_preorder ?? false,
     preorder_days: product?.preorder_days?.toString() || '',
+    is_bulk_pricing: product?.is_bulk_pricing ?? false,
+    bulk_min_price: product?.bulk_min_price?.toString() || '1000',
   })
 
   const handleNameChange = (name: string) => {
@@ -79,6 +81,8 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       is_active: form.is_active,
       is_preorder: form.is_preorder,
       preorder_days: form.is_preorder ? parseInt(form.preorder_days) : null,
+      is_bulk_pricing: form.is_bulk_pricing,
+      bulk_min_price: form.is_bulk_pricing ? parseInt(form.bulk_min_price) : null,
     }
 
     try {
@@ -279,6 +283,43 @@ export function ProductForm({ product, categories }: ProductFormProps) {
               placeholder="e.g., 2 untuk H+2"
               required={form.is_preorder}
             />
+          </div>
+        )}
+
+        <div className="col-span-2 flex items-center justify-between py-2">
+          <div>
+            <Label htmlFor="is_bulk_pricing">Harga Curah</Label>
+            <p className="text-sm text-gray-500">
+              Pembeli membeli berdasarkan nominal Rupiah, bukan kuantitas
+            </p>
+          </div>
+          <Switch
+            id="is_bulk_pricing"
+            checked={form.is_bulk_pricing}
+            onCheckedChange={(checked) =>
+              setForm({ ...form, is_bulk_pricing: checked })
+            }
+          />
+        </div>
+
+        {form.is_bulk_pricing && (
+          <div className="col-span-2">
+            <Label htmlFor="bulk_min_price">Minimal Pembelian (Rp)</Label>
+            <Input
+              id="bulk_min_price"
+              type="number"
+              min="100"
+              step="100"
+              value={form.bulk_min_price}
+              onChange={(e) =>
+                setForm({ ...form, bulk_min_price: e.target.value })
+              }
+              placeholder="e.g., 1000 untuk minimal Rp 1.000"
+              required={form.is_bulk_pricing}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Minimal nominal yang bisa dibeli pembeli
+            </p>
           </div>
         )}
       </div>

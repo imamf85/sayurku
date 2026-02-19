@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { ShoppingBag } from 'lucide-react'
 import { CartContent } from './cart-content'
+import { calculateCartItemTotal } from '@/lib/utils'
 
 export default async function CartPage() {
   const supabase = createClient()
@@ -21,7 +22,7 @@ export default async function CartPage() {
     .order('created_at', { ascending: false })
 
   const total = cartItems?.reduce(
-    (acc, item) => acc + (item.product?.price || 0) * item.quantity,
+    (acc, item) => acc + calculateCartItemTotal(item),
     0
   ) || 0
 

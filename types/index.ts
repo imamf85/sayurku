@@ -80,6 +80,8 @@ export interface Product {
   is_active: boolean
   is_preorder: boolean
   preorder_days: number | null
+  is_bulk_pricing: boolean
+  bulk_min_price: number | null
   created_at: string
   updated_at: string
   category?: Category
@@ -148,6 +150,7 @@ export interface ProductSnapshot {
   price: number
   unit: Unit
   unit_value: number
+  is_bulk_pricing?: boolean
 }
 
 export interface Order {

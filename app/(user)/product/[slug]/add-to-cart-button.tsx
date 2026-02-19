@@ -4,18 +4,27 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Minus, Plus, ShoppingCart, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BulkPriceInput } from '@/components/user/BulkPriceInput'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, getMaxBulkNominal } from '@/lib/utils'
 
 interface AddToCartButtonProps {
   productId: string
   stock: number
   price: number
+  isBulkPricing?: boolean
+  bulkMinPrice?: number
 }
 
-export function AddToCartButton({ productId, stock, price }: AddToCartButtonProps) {
-  const [quantity, setQuantity] = useState(1)
+export function AddToCartButton({
+  productId,
+  stock,
+  price,
+  isBulkPricing = false,
+  bulkMinPrice = 1000,
+}: AddToCartButtonProps) {
+  const [quantity, setQuantity] = useState(isBulkPricing ? bulkMinPrice : 1)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
@@ -38,28 +47,58 @@ export function AddToCartButton({ productId, stock, price }: AddToCartButtonProp
       .eq('product_id', productId)
       .single()
 
-    if (existingItem) {
-      const newQuantity = existingItem.quantity + quantity
-      if (newQuantity > stock) {
-        toast({
-          title: 'Stok tidak cukup',
-          description: `Maksimal ${stock} item`,
-          variant: 'destructive',
-        })
-        setLoading(false)
-        return
-      }
+    if (isBulkPricing) {
+      // For bulk pricing, quantity is the nominal in Rupiah
+      const maxNominal = getMaxBulkNominal(stock, price)
 
-      await supabase
-        .from('cart_items')
-        .update({ quantity: newQuantity })
-        .eq('id', existingItem.id)
+      if (existingItem) {
+        const newNominal = existingItem.quantity + quantity
+        if (newNominal > maxNominal) {
+          toast({
+            title: 'Melebihi stok',
+            description: `Maksimal ${formatPrice(maxNominal)}`,
+            variant: 'destructive',
+          })
+          setLoading(false)
+          return
+        }
+
+        await supabase
+          .from('cart_items')
+          .update({ quantity: newNominal })
+          .eq('id', existingItem.id)
+      } else {
+        await supabase.from('cart_items').insert({
+          user_id: user.id,
+          product_id: productId,
+          quantity,
+        })
+      }
     } else {
-      await supabase.from('cart_items').insert({
-        user_id: user.id,
-        product_id: productId,
-        quantity,
-      })
+      // For regular products
+      if (existingItem) {
+        const newQuantity = existingItem.quantity + quantity
+        if (newQuantity > stock) {
+          toast({
+            title: 'Stok tidak cukup',
+            description: `Maksimal ${stock} item`,
+            variant: 'destructive',
+          })
+          setLoading(false)
+          return
+        }
+
+        await supabase
+          .from('cart_items')
+          .update({ quantity: newQuantity })
+          .eq('id', existingItem.id)
+      } else {
+        await supabase.from('cart_items').insert({
+          user_id: user.id,
+          product_id: productId,
+          quantity,
+        })
+      }
     }
 
     toast({
@@ -71,6 +110,37 @@ export function AddToCartButton({ productId, stock, price }: AddToCartButtonProp
     setLoading(false)
   }
 
+  // Render bulk pricing input
+  if (isBulkPricing) {
+    return (
+      <div className="space-y-4">
+        <BulkPriceInput
+          pricePerKg={price}
+          stock={stock}
+          minPrice={bulkMinPrice}
+          value={quantity}
+          onChange={setQuantity}
+        />
+
+        <Button
+          className="w-full h-12 bg-green-600 hover:bg-green-700"
+          onClick={handleAddToCart}
+          disabled={loading || stock === 0}
+        >
+          {loading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <>
+              <ShoppingCart className="h-5 w-5 mr-2" />
+              Tambah ke Keranjang
+            </>
+          )}
+        </Button>
+      </div>
+    )
+  }
+
+  // Render regular quantity selector
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-2 border rounded-lg p-1">

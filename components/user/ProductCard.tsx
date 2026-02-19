@@ -69,18 +69,21 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
       .eq('product_id', product.id)
       .single()
 
+    // For bulk pricing, add minimum price; for regular, add 1 unit
+    const addQuantity = product.is_bulk_pricing ? (product.bulk_min_price || 1000) : 1
+
     let error
     if (existingItem) {
       const result = await supabase
         .from('cart_items')
-        .update({ quantity: existingItem.quantity + 1 })
+        .update({ quantity: existingItem.quantity + addQuantity })
         .eq('id', existingItem.id)
       error = result.error
     } else {
       const result = await supabase.from('cart_items').insert({
         user_id: user.id,
         product_id: product.id,
-        quantity: 1,
+        quantity: addQuantity,
       })
       error = result.error
     }
@@ -161,6 +164,11 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
               Preorder H-{product.preorder_days}
             </Badge>
           )}
+          {product.is_bulk_pricing && !product.is_preorder && (
+            <Badge className="absolute top-2 left-2 bg-purple-500">
+              Curah
+            </Badge>
+          )}
           {hasDiscount && (
             <Badge className="absolute top-2 right-2 bg-red-500">
               {promo?.type === 'percentage' ? `${promo.value}%` : formatPrice(promo?.value || 0)}
@@ -173,7 +181,7 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
         <Link href={`/product/${product.slug}`}>
           <h3 className="font-medium text-sm line-clamp-2 mb-1">{product.name}</h3>
           <p className="text-xs text-gray-500 mb-2">
-            {formatUnit(product.unit, product.unit_value)}
+            {product.is_bulk_pricing ? '/kg' : formatUnit(product.unit, product.unit_value)}
           </p>
         </Link>
 

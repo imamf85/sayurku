@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, calculateCartItemTotal } from '@/lib/utils'
 import { CartItem } from '@/types'
 import { CartActions } from './cart-actions'
 
@@ -23,9 +23,9 @@ export function CartContent({ initialItems, initialTotal }: CartContentProps) {
         item.id === itemId ? { ...item, quantity: newQuantity } : item
       )
 
-      // Recalculate total with updated items
+      // Recalculate total with updated items using calculateCartItemTotal
       const newTotal = updatedItems.reduce(
-        (acc, item) => acc + (item.product?.price || 0) * item.quantity,
+        (acc, item) => acc + calculateCartItemTotal(item),
         0
       )
       setTotal(newTotal)

@@ -68,6 +68,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
             Preorder H-{product.preorder_days}
           </Badge>
         )}
+        {product.is_bulk_pricing && (
+          <Badge className="absolute top-4 left-4 bg-purple-500">
+            Curah
+          </Badge>
+        )}
       </div>
 
       <div className="container px-4 py-4">
@@ -109,7 +114,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <div className="mt-2">
           {product.stock > 0 ? (
-            <p className="text-sm text-green-600">Stok: {product.stock}</p>
+            <p className="text-sm text-green-600">
+              Stok: {product.stock} {product.is_bulk_pricing ? 'kg' : ''}
+            </p>
           ) : (
             <p className="text-sm text-red-500">Stok habis</p>
           )}
@@ -170,6 +177,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           productId={product.id}
           stock={product.stock}
           price={discountedPrice}
+          isBulkPricing={product.is_bulk_pricing}
+          bulkMinPrice={product.bulk_min_price ?? 1000}
         />
       </div>
     </div>

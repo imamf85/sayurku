@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { Unit, PromoType, Product, Promo, DeliverySlot } from '@/types'
+import { Unit, PromoType, Product, Promo, DeliverySlot, CartItem } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -133,4 +133,58 @@ export function getStatusColor(status: string): string {
     cancelled: 'bg-red-100 text-red-800',
   }
   return colors[status] || 'bg-gray-100 text-gray-800'
+}
+
+/**
+ * Calculate weight in grams from nominal price for bulk pricing products
+ * @param nominal - The amount in Rupiah
+ * @param pricePerKg - Price per kilogram
+ * @returns Weight in grams
+ */
+export function calculateBulkWeight(nominal: number, pricePerKg: number): number {
+  if (pricePerKg <= 0) return 0
+  return Math.round((nominal / pricePerKg) * 1000)
+}
+
+/**
+ * Format bulk weight display (gram or kg based on amount)
+ * @param weightInGrams - Weight in grams
+ * @returns Formatted weight string
+ */
+export function formatBulkWeight(weightInGrams: number): string {
+  if (weightInGrams >= 1000) {
+    const kg = weightInGrams / 1000
+    return `${kg % 1 === 0 ? kg : kg.toFixed(1)} kg`
+  }
+  return `${weightInGrams} gram`
+}
+
+/**
+ * Calculate cart item total based on product type
+ * For bulk pricing: quantity IS the nominal (price in Rupiah)
+ * For regular: quantity * price
+ * @param item - Cart item with product
+ * @returns Total price for this cart item
+ */
+export function calculateCartItemTotal(item: CartItem): number {
+  if (!item.product) return 0
+
+  if (item.product.is_bulk_pricing) {
+    // For bulk pricing, quantity represents the nominal in Rupiah
+    return item.quantity
+  }
+
+  // For regular products
+  return item.product.price * item.quantity
+}
+
+/**
+ * Get maximum nominal that can be purchased based on stock
+ * Stock represents how many kg available
+ * @param stock - Stock in kg
+ * @param pricePerKg - Price per kg
+ * @returns Maximum nominal in Rupiah
+ */
+export function getMaxBulkNominal(stock: number, pricePerKg: number): number {
+  return stock * pricePerKg
 }
