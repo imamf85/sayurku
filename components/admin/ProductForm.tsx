@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ImageUpload } from '@/components/admin/ImageUpload'
 import { Product, Category, Unit } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import { slugify } from '@/lib/utils'
@@ -170,13 +171,10 @@ export function ProductForm({ product, categories }: ProductFormProps) {
         </div>
 
         <div className="col-span-2">
-          <Label htmlFor="image_url">URL Gambar</Label>
-          <Input
-            id="image_url"
-            type="url"
+          <Label>Gambar Produk</Label>
+          <ImageUpload
             value={form.image_url}
-            onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-            placeholder="https://..."
+            onChange={(url) => setForm({ ...form, image_url: url })}
           />
         </div>
 
