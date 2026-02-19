@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ImageUpload } from '@/components/admin/ImageUpload'
 import { Category } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import { slugify } from '@/lib/utils'
@@ -188,12 +189,11 @@ export default function CategoriesPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="image_url">URL Gambar</Label>
-                <Input
-                  id="image_url"
-                  type="url"
+                <Label>Gambar Kategori</Label>
+                <ImageUpload
                   value={form.image_url}
-                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  onChange={(url) => setForm({ ...form, image_url: url })}
+                  folder="categories"
                 />
               </div>
               <div>
