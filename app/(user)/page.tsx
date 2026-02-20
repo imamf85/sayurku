@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ProductCard } from '@/components/user/ProductCard'
-import { PromoCarousel } from '@/components/user/PromoCarousel'
 import { CategoryGrid } from '@/components/user/CategoryGrid'
+import { PromoProductsCarousel } from '@/components/user/PromoProductsCarousel'
 
 export default async function HomePage() {
   const supabase = createClient()
@@ -31,28 +31,34 @@ export default async function HomePage() {
   const products = productsRes.data || []
   const promos = promosRes.data || []
 
-  const promoSlides = promos.slice(0, 5).map((promo) => ({
-    id: promo.id,
-    image_url: promo.product?.image_url || '',
-    title: promo.name,
-  }))
+  // Map promos with their products for the carousel
+  const promoProducts = promos
+    .filter((promo) => promo.product)
+    .map((promo) => ({
+      product: promo.product!,
+      promo: promo,
+    }))
 
+  // Create promo map for product cards
   const promoMap = new Map(
     promos.map((promo) => [promo.product_id, promo])
   )
 
   return (
     <div className="container px-4 py-4 space-y-6">
-      {promoSlides.length > 0 && <PromoCarousel slides={promoSlides} />}
-
+      {/* Kategori */}
       <section>
         <h2 className="text-lg font-bold mb-3">Kategori</h2>
         <CategoryGrid categories={categories} />
       </section>
 
+      {/* Promo Spesial - Always shown */}
+      <PromoProductsCarousel promoProducts={promoProducts} />
+
+      {/* Produk Terbaru */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold">Produk Terbaru</h2>
+          <h2 className="text-lg font-bold">List Produk</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {products.map((product) => (
@@ -64,26 +70,6 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
-
-      {promos.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold">Promo Spesial</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {promos
-              .filter((promo) => promo.product)
-              .slice(0, 8)
-              .map((promo) => (
-                <ProductCard
-                  key={promo.id}
-                  product={promo.product!}
-                  promo={promo}
-                />
-              ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

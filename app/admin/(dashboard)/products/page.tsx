@@ -80,8 +80,8 @@ export default async function ProductsPage() {
                           product.stock === 0
                             ? 'text-red-500'
                             : product.stock < 10
-                            ? 'text-orange-500'
-                            : ''
+                              ? 'text-orange-500'
+                              : ''
                         }
                       >
                         {product.stock}
