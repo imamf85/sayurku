@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Promo, PromoType } from '@/types'
 import { useToast } from '@/hooks/use-toast'
-import { formatPrice, formatDate } from '@/lib/utils'
+import { formatPrice, formatDate, utcToLocalDatetimeInput, localDatetimeInputToUtc, getPromoStatus, getPromoStatusColor } from '@/lib/utils'
 
 export default function PromosPage() {
   const { toast } = useToast()
@@ -80,8 +80,8 @@ export default function PromosPage() {
       name: form.name,
       type: form.type,
       value: parseFloat(form.value),
-      start_date: new Date(form.start_date).toISOString(),
-      end_date: new Date(form.end_date).toISOString(),
+      start_date: localDatetimeInputToUtc(form.start_date),
+      end_date: localDatetimeInputToUtc(form.end_date),
       is_active: form.is_active,
     }
 
@@ -122,8 +122,8 @@ export default function PromosPage() {
       name: promo.name,
       type: promo.type,
       value: promo.value.toString(),
-      start_date: new Date(promo.start_date).toISOString().slice(0, 16),
-      end_date: new Date(promo.end_date).toISOString().slice(0, 16),
+      start_date: utcToLocalDatetimeInput(promo.start_date),
+      end_date: utcToLocalDatetimeInput(promo.end_date),
       is_active: promo.is_active,
     })
     setDialogOpen(true)
@@ -317,11 +317,18 @@ export default function PromosPage() {
                       {formatDate(promo.start_date)} - {formatDate(promo.end_date)}
                     </td>
                     <td className="p-4">
-                      {promo.is_active ? (
-                        <Badge className="bg-green-100 text-green-800">Aktif</Badge>
-                      ) : (
-                        <Badge variant="secondary">Nonaktif</Badge>
-                      )}
+                      {(() => {
+                        const { status, label } = getPromoStatus(
+                          promo.is_active,
+                          promo.start_date,
+                          promo.end_date
+                        )
+                        return (
+                          <Badge className={getPromoStatusColor(status)}>
+                            {label}
+                          </Badge>
+                        )
+                      })()}
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-1">

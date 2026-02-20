@@ -188,3 +188,73 @@ export function calculateCartItemTotal(item: CartItem): number {
 export function getMaxBulkNominal(stock: number, pricePerKg: number): number {
   return stock * pricePerKg
 }
+
+/**
+ * Convert UTC date string to local datetime-local input format
+ * Used for populating datetime-local inputs with existing data
+ * @param utcDate - UTC date string from database
+ * @returns Local datetime string in "YYYY-MM-DDTHH:mm" format
+ */
+export function utcToLocalDatetimeInput(utcDate: string): string {
+  const date = new Date(utcDate)
+  // Get local date components
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+/**
+ * Convert local datetime-local input value to UTC ISO string
+ * Used for saving datetime-local input values to database
+ * @param localDatetime - Local datetime string from input
+ * @returns UTC ISO string
+ */
+export function localDatetimeInputToUtc(localDatetime: string): string {
+  // datetime-local input gives us local time without timezone
+  // new Date() interprets it as local time, then toISOString() converts to UTC
+  return new Date(localDatetime).toISOString()
+}
+
+/**
+ * Get promo/voucher status based on is_active, start_date, and end_date
+ * @returns Object with status key and label
+ */
+export function getPromoStatus(
+  isActive: boolean,
+  startDate: string,
+  endDate: string
+): { status: 'active' | 'inactive' | 'scheduled' | 'expired'; label: string } {
+  const now = new Date()
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+
+  if (!isActive) {
+    return { status: 'inactive', label: 'Nonaktif' }
+  }
+
+  if (now < start) {
+    return { status: 'scheduled', label: 'Terjadwal' }
+  }
+
+  if (now > end) {
+    return { status: 'expired', label: 'Berakhir' }
+  }
+
+  return { status: 'active', label: 'Aktif' }
+}
+
+/**
+ * Get badge color class based on promo status
+ */
+export function getPromoStatusColor(status: 'active' | 'inactive' | 'scheduled' | 'expired'): string {
+  const colors = {
+    active: 'bg-green-100 text-green-800',
+    inactive: 'bg-gray-100 text-gray-800',
+    scheduled: 'bg-blue-100 text-blue-800',
+    expired: 'bg-red-100 text-red-800',
+  }
+  return colors[status]
+}

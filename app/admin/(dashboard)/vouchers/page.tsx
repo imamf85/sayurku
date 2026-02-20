@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Voucher, PromoType } from '@/types'
 import { useToast } from '@/hooks/use-toast'
-import { formatPrice, formatDate } from '@/lib/utils'
+import { formatPrice, formatDate, utcToLocalDatetimeInput, localDatetimeInputToUtc, getPromoStatus, getPromoStatusColor } from '@/lib/utils'
 
 export default function VouchersPage() {
   const { toast } = useToast()
@@ -74,8 +74,8 @@ export default function VouchersPage() {
       min_purchase: parseFloat(form.min_purchase) || 0,
       max_discount: form.max_discount ? parseFloat(form.max_discount) : null,
       usage_limit: parseInt(form.usage_limit) || 0,
-      start_date: new Date(form.start_date).toISOString(),
-      end_date: new Date(form.end_date).toISOString(),
+      start_date: localDatetimeInputToUtc(form.start_date),
+      end_date: localDatetimeInputToUtc(form.end_date),
       is_active: form.is_active,
     }
 
@@ -118,8 +118,8 @@ export default function VouchersPage() {
       min_purchase: voucher.min_purchase.toString(),
       max_discount: voucher.max_discount?.toString() || '',
       usage_limit: voucher.usage_limit.toString(),
-      start_date: new Date(voucher.start_date).toISOString().slice(0, 16),
-      end_date: new Date(voucher.end_date).toISOString().slice(0, 16),
+      start_date: utcToLocalDatetimeInput(voucher.start_date),
+      end_date: utcToLocalDatetimeInput(voucher.end_date),
       is_active: voucher.is_active,
     })
     setDialogOpen(true)
@@ -334,11 +334,18 @@ export default function VouchersPage() {
                       {formatDate(voucher.start_date)} - {formatDate(voucher.end_date)}
                     </td>
                     <td className="p-4">
-                      {voucher.is_active ? (
-                        <Badge className="bg-green-100 text-green-800">Aktif</Badge>
-                      ) : (
-                        <Badge variant="secondary">Nonaktif</Badge>
-                      )}
+                      {(() => {
+                        const { status, label } = getPromoStatus(
+                          voucher.is_active,
+                          voucher.start_date,
+                          voucher.end_date
+                        )
+                        return (
+                          <Badge className={getPromoStatusColor(status)}>
+                            {label}
+                          </Badge>
+                        )
+                      })()}
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-1">
