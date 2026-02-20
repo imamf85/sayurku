@@ -242,6 +242,8 @@ export function CheckoutForm({
         body: JSON.stringify({ orderId: order.id }),
       }).catch(console.error) // Don't block redirect if notification fails
 
+      // Refresh to invalidate cart count cache, then redirect
+      router.refresh()
       router.push(`/payment/${order.id}`)
     } catch (error) {
       console.error(error)

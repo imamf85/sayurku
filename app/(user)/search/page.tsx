@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { SearchBar } from '@/components/user/SearchBar'
 import { ProductCard } from '@/components/user/ProductCard'
+import { NoResultsInquiry } from '@/components/user/NoResultsInquiry'
 
 interface SearchPageProps {
   searchParams: { q?: string }
@@ -42,9 +43,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500">Tidak ada produk yang ditemukan</p>
-            </div>
+            <NoResultsInquiry searchQuery={query} />
           )}
         </>
       ) : (

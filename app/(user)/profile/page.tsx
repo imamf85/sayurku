@@ -9,8 +9,10 @@ import {
   MapPin,
   User,
   Phone,
+  Mail,
   Pencil,
   CheckCircle2,
+  MessageSquare,
 } from 'lucide-react'
 import { LogoutButton } from './logout-button'
 
@@ -36,8 +38,10 @@ export default async function ProfilePage() {
     .toUpperCase()
     .slice(0, 2) || user.email?.[0].toUpperCase()
 
-  // All users login via WhatsApp, so phone is always verified
-  const displayPhone = profile?.phone || user.email?.replace('@whatsapp.sayurku.local', '')
+  // Detect if user logged in via WhatsApp OTP or OAuth
+  const isWhatsAppUser = user.email?.endsWith('@whatsapp.sayurku.local')
+  const displayPhone = profile?.phone || (isWhatsAppUser ? user.email?.replace('@whatsapp.sayurku.local', '') : null)
+  const displayEmail = !isWhatsAppUser ? user.email : null
 
   return (
     <div className="container px-4 py-4">
@@ -63,7 +67,7 @@ export default async function ProfilePage() {
               {profile?.full_name || 'Nama belum diisi'}
             </p>
             <p className="text-sm text-gray-500 truncate">
-              {displayPhone}
+              {displayPhone || displayEmail}
             </p>
           </div>
         </div>
@@ -84,30 +88,49 @@ export default async function ProfilePage() {
             </div>
           </div>
 
-          {/* WhatsApp - always verified since user logged in via OTP */}
-          <div className="flex items-center gap-3 p-4">
-            <Phone className="h-5 w-5 text-gray-400" />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-gray-500">WhatsApp</p>
-                <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Terverifikasi
-                </Badge>
+          {/* WhatsApp - only show verified badge for WhatsApp OTP users */}
+          {isWhatsAppUser ? (
+            <div className="flex items-center gap-3 p-4">
+              <Phone className="h-5 w-5 text-gray-400" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-500">WhatsApp</p>
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Terverifikasi
+                  </Badge>
+                </div>
+                <p className="font-medium">
+                  {displayPhone || '-'}
+                </p>
               </div>
-              <p className="font-medium">
-                {displayPhone || '-'}
-              </p>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3 p-4">
+              <Mail className="h-5 w-5 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-sm text-gray-500">Email</p>
+                <p className="font-medium">
+                  {displayEmail || '-'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="bg-white rounded-lg overflow-hidden mb-4">
         <Link href="/profile/addresses">
-          <div className="flex items-center gap-3 p-4">
+          <div className="flex items-center gap-3 p-4 border-b">
             <MapPin className="h-5 w-5 text-gray-400" />
             <span className="flex-1">Alamat Pengiriman</span>
+            <ChevronRight className="h-5 w-5 text-gray-400" />
+          </div>
+        </Link>
+        <Link href="/permintaan">
+          <div className="flex items-center gap-3 p-4">
+            <MessageSquare className="h-5 w-5 text-gray-400" />
+            <span className="flex-1">Permintaan Item</span>
             <ChevronRight className="h-5 w-5 text-gray-400" />
           </div>
         </Link>

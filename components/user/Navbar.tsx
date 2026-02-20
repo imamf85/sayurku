@@ -17,6 +17,7 @@ export function Navbar({ cartCount = 0 }: NavbarProps) {
     { href: '/search', label: 'Cari' },
     { href: '/wishlist', label: 'Wishlist' },
     { href: '/orders', label: 'Pesanan' },
+    { href: '/requests', label: 'Permintaan' },
     { href: '/profile', label: 'Profil' },
   ]
 

@@ -14,6 +14,8 @@ export type AdminRole = 'super_admin' | 'admin'
 
 export type DeliverySlotType = 'instant' | 'scheduled'
 
+export type InquiryStatus = 'pending' | 'accepted' | 'rejected' | 'ordered' | 'cancelled'
+
 export interface OtpVerification {
   id: string
   phone: string
@@ -208,6 +210,27 @@ export interface DeliverySlot {
   sort_order: number
 }
 
+export interface ProductInquiry {
+  id: string
+  user_id: string
+  item_name: string
+  quantity: number
+  quantity_unit: string
+  needed_by: string
+  brand_preference: string | null
+  notes: string | null
+  status: InquiryStatus
+  estimated_price: number | null
+  rejection_reason: string | null
+  responded_by: string | null
+  responded_at: string | null
+  order_id: string | null
+  created_at: string
+  updated_at: string
+  profile?: Profile
+  admin?: Admin
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -275,6 +298,11 @@ export interface Database {
         Row: DeliverySlot
         Insert: Omit<DeliverySlot, 'id'>
         Update: Partial<Omit<DeliverySlot, 'id'>>
+      }
+      product_inquiries: {
+        Row: ProductInquiry
+        Insert: Omit<ProductInquiry, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<ProductInquiry, 'id' | 'user_id' | 'created_at'>>
       }
     }
   }

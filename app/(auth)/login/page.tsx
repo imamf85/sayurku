@@ -30,10 +30,11 @@ function LoginContent() {
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect') || '/'
   const expired = searchParams.get('expired')
+  const error = searchParams.get('error')
   const { toast } = useToast()
   const supabase = createClient()
 
-  // Show expired session message
+  // Show messages based on URL params
   useEffect(() => {
     if (expired === '1') {
       toast({
@@ -42,7 +43,16 @@ function LoginContent() {
         variant: 'destructive',
       })
     }
-  }, [expired, toast])
+    if (error === 'use_whatsapp') {
+      toast({
+        title: 'Gunakan WhatsApp',
+        description: 'Silakan login menggunakan nomor WhatsApp Anda',
+        variant: 'destructive',
+      })
+      // Clear the URL param
+      window.history.replaceState({}, '', '/login')
+    }
+  }, [expired, error, toast])
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()

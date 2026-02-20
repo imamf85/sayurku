@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -29,6 +30,7 @@ const menuItems = [
   { href: '/admin/products', icon: Package, label: 'Produk' },
   { href: '/admin/categories', icon: FolderTree, label: 'Kategori' },
   { href: '/admin/orders', icon: ClipboardList, label: 'Pesanan' },
+  { href: '/admin/inquiries', icon: MessageSquare, label: 'Permintaan Item' },
   { href: '/admin/promos', icon: Tag, label: 'Promo' },
   { href: '/admin/vouchers', icon: Ticket, label: 'Voucher' },
   { href: '/admin/delivery-slots', icon: Clock, label: 'Slot Pengiriman' },
