@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Package,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 
 interface SidebarProps {
   adminName: string
@@ -38,11 +38,21 @@ const menuItems = [
 
 export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
   const allMenuItems = isSuperAdmin
     ? [...menuItems, { href: '/admin/admins', icon: Users, label: 'Admin' }]
     : menuItems
+
+  const handleNavigation = (href: string) => {
+    setMobileOpen(false)
+    startTransition(() => {
+      router.push(href)
+      router.refresh()
+    })
+  }
 
   return (
     <>
@@ -74,9 +84,12 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
         )}
       >
         <div className="h-14 flex items-center justify-center border-b">
-          <Link href="/admin" className="font-bold text-green-600 text-lg">
+          <button
+            onClick={() => handleNavigation('/admin')}
+            className="font-bold text-green-600 text-lg"
+          >
             Sayurku Admin
-          </Link>
+          </button>
         </div>
 
         <nav className="p-4 space-y-1">
@@ -85,20 +98,21 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
               pathname === item.href ||
               (item.href !== '/admin' && pathname.startsWith(item.href))
             return (
-              <Link
+              <button
                 key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => handleNavigation(item.href)}
+                disabled={isPending}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left',
                   isActive
                     ? 'bg-green-50 text-green-600 font-medium'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-gray-600 hover:bg-gray-100',
+                  isPending && 'opacity-50 cursor-wait'
                 )}
               >
                 <item.icon className="h-5 w-5" />
                 {item.label}
-              </Link>
+              </button>
             )
           })}
         </nav>
