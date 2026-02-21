@@ -172,10 +172,24 @@ export interface Order {
   payment_method: string | null
   payment_id: string | null
   paid_at: string | null
+  tracking_token: string | null
+  received_by: string | null
+  delivery_proof_url: string | null
   created_at: string
   updated_at: string
   items?: OrderItem[]
   voucher?: Voucher | null
+  status_history?: OrderStatusHistory[]
+}
+
+export interface OrderStatusHistory {
+  id: string
+  order_id: string
+  status: OrderStatus
+  note: string | null
+  created_by: string | null
+  created_at: string
+  admin?: Admin
 }
 
 export interface OrderItem {

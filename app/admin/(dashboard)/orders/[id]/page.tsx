@@ -2,10 +2,13 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { ExternalLink, Copy } from 'lucide-react'
 import {
   formatPrice,
   formatDate,
@@ -14,6 +17,8 @@ import {
   getStatusColor,
 } from '@/lib/utils'
 import { UpdateOrderStatus } from './update-status'
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
 
 interface OrderDetailPageProps {
   params: { id: string }
@@ -38,6 +43,16 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     .eq('id', order.delivery_slot)
     .single()
 
+  const { data: statusHistory } = await supabase
+    .from('order_status_history')
+    .select('*, admin:admins(name)')
+    .eq('order_id', params.id)
+    .order('created_at', { ascending: false })
+
+  const trackingUrl = order.tracking_token
+    ? `${APP_URL}/track/${order.tracking_token}`
+    : null
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -49,6 +64,27 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           {getStatusLabel(order.status)}
         </Badge>
       </div>
+
+      {/* Tracking Link */}
+      {trackingUrl && (
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-green-800">Link Tracking Publik</p>
+                <p className="text-xs text-green-600 break-all">{trackingUrl}</p>
+              </div>
+              <div className="flex gap-2">
+                <Link href={trackingUrl} target="_blank">
+                  <Button variant="outline" size="sm">
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
@@ -101,6 +137,12 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <span className="text-gray-500">Waktu</span>
               <span>{slot?.name || order.delivery_slot}</span>
             </div>
+            {order.received_by && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Diterima oleh</span>
+                <span>{order.received_by}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -126,6 +168,25 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           </CardContent>
         </Card>
       </div>
+
+      {/* Delivery Proof */}
+      {order.delivery_proof_url && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bukti Pengiriman</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="relative w-48 h-48 rounded-lg overflow-hidden border">
+              <Image
+                src={order.delivery_proof_url}
+                alt="Bukti pengiriman"
+                fill
+                className="object-cover"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -182,7 +243,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       {order.notes && (
         <Card>
           <CardHeader>
-            <CardTitle>Catatan</CardTitle>
+            <CardTitle>Catatan Pembeli</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600">{order.notes}</p>
@@ -190,12 +251,64 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         </Card>
       )}
 
+      {/* Status History Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Riwayat Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {statusHistory && statusHistory.length > 0 ? (
+            <div className="space-y-4">
+              {statusHistory.map((history: any, index: number) => (
+                <div key={history.id} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-3 h-3 rounded-full ${
+                        index === 0 ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                    />
+                    {index < statusHistory.length - 1 && (
+                      <div className="w-0.5 flex-1 bg-gray-200 my-1" />
+                    )}
+                  </div>
+                  <div className="flex-1 pb-4">
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(history.status)} variant="outline">
+                        {getStatusLabel(history.status)}
+                      </Badge>
+                      {history.admin?.name && (
+                        <span className="text-xs text-gray-500">
+                          oleh {history.admin.name}
+                        </span>
+                      )}
+                    </div>
+                    {history.note && (
+                      <p className="text-sm text-gray-600 mt-1">{history.note}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">
+                      {formatDateTime(history.created_at)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Belum ada riwayat status</p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Update Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <UpdateOrderStatus orderId={order.id} currentStatus={order.status} />
+          <UpdateOrderStatus
+            orderId={order.id}
+            currentStatus={order.status}
+            currentReceivedBy={order.received_by}
+            currentDeliveryProof={order.delivery_proof_url}
+          />
         </CardContent>
       </Card>
     </div>

@@ -12,7 +12,8 @@ function formatOrderMessageForUser(
   total: number,
   itemCount: number,
   deliveryDate: string,
-  deliverySlot: string
+  deliverySlot: string,
+  trackingUrl: string
 ): string {
   return `*Pesanan Berhasil - Sayurku*
 
@@ -28,6 +29,9 @@ Tanggal: ${deliveryDate}
 Waktu: ${deliverySlot}
 
 Siapkan uang pas sebesar ${formatPrice(total)} saat pesanan tiba.
+
+Lacak pesanan Anda:
+${trackingUrl}
 
 Terima kasih!`
 }
@@ -126,12 +130,17 @@ export async function POST(request: NextRequest) {
     const fullAddress = `${addr.address}, ${addr.village ? addr.village + ', ' : ''}${addr.district}, ${addr.city}${addr.province ? ', ' + addr.province : ''} ${addr.postal_code}`
 
     if (customerPhone) {
+      const trackingUrl = order.tracking_token
+        ? `${APP_URL}/track/${order.tracking_token}`
+        : `${APP_URL}/orders`
+
       const userMessage = formatOrderMessageForUser(
         order.order_number,
         order.total,
         order.items?.length || 0,
         deliveryDate,
-        order.delivery_slot.name
+        order.delivery_slot.name,
+        trackingUrl
       )
 
       await sendWhatsAppMessage({
