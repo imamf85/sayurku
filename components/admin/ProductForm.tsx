@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ImageUpload } from '@/components/admin/ImageUpload'
+import { MultiImageUpload } from '@/components/admin/MultiImageUpload'
 import { Product, Category, Unit } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import { slugify } from '@/lib/utils'
@@ -45,7 +45,11 @@ export function ProductForm({ product, categories }: ProductFormProps) {
     slug: product?.slug || '',
     category_id: product?.category_id || '',
     description: product?.description || '',
-    image_url: product?.image_url || '',
+    images: product?.images?.length > 0
+      ? product.images
+      : product?.image_url
+        ? [product.image_url]
+        : [],
     price: product?.price?.toString() || '',
     unit: product?.unit || 'gram',
     unit_value: product?.unit_value?.toString() || '',
@@ -74,7 +78,8 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       slug: form.slug,
       category_id: form.category_id,
       description: form.description || null,
-      image_url: form.image_url || null,
+      image_url: form.images[0] || null,
+      images: form.images,
       price: parseFloat(form.price),
       unit: form.unit as Unit,
       unit_value: parseFloat(form.unit_value),
@@ -172,9 +177,13 @@ export function ProductForm({ product, categories }: ProductFormProps) {
 
         <div className="col-span-2">
           <Label>Gambar Produk</Label>
-          <ImageUpload
-            value={form.image_url}
-            onChange={(url) => setForm({ ...form, image_url: url })}
+          <p className="text-sm text-gray-500 mb-2">
+            Gambar pertama akan menjadi gambar utama
+          </p>
+          <MultiImageUpload
+            value={form.images}
+            onChange={(urls) => setForm({ ...form, images: urls })}
+            maxImages={5}
           />
         </div>
 

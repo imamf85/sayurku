@@ -75,6 +75,7 @@ export interface Product {
   slug: string
   description: string | null
   image_url: string | null
+  images: string[]
   price: number
   unit: Unit
   unit_value: number
