@@ -13,6 +13,7 @@ import {
   Pencil,
   CheckCircle2,
   MessageSquare,
+  Heart,
 } from 'lucide-react'
 import { LogoutButton } from './logout-button'
 
@@ -128,9 +129,16 @@ export default async function ProfilePage() {
           </div>
         </Link>
         <Link href="/permintaan">
-          <div className="flex items-center gap-3 p-4">
+          <div className="flex items-center gap-3 p-4 border-b">
             <MessageSquare className="h-5 w-5 text-gray-400" />
             <span className="flex-1">Permintaan Item</span>
+            <ChevronRight className="h-5 w-5 text-gray-400" />
+          </div>
+        </Link>
+        <Link href="/wishlist">
+          <div className="flex items-center gap-3 p-4">
+            <Heart className="h-5 w-5 text-gray-400" />
+            <span className="flex-1">Wishlist</span>
             <ChevronRight className="h-5 w-5 text-gray-400" />
           </div>
         </Link>
