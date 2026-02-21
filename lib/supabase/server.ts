@@ -24,6 +24,14 @@ export function createClient() {
           }
         },
       },
+      global: {
+        fetch: (url: RequestInfo | URL, options: RequestInit = {}) => {
+          return fetch(url, {
+            ...options,
+            cache: 'no-store',
+          })
+        }
+      }
     }
   )
 }

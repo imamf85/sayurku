@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Loader2, Upload, X, ImageIcon } from 'lucide-react'
@@ -52,6 +52,13 @@ export function UpdateOrderStatus({
   const [deliveryProof, setDeliveryProof] = useState(currentDeliveryProof || '')
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+
+  // Sync state with props when they change
+  useEffect(() => {
+    setStatus(currentStatus)
+    setReceivedBy(currentReceivedBy || '')
+    setDeliveryProof(currentDeliveryProof || '')
+  }, [currentStatus, currentReceivedBy, currentDeliveryProof])
 
   const showDeliveryFields = status === 'delivered'
 
