@@ -45,8 +45,8 @@ export function ProductForm({ product, categories }: ProductFormProps) {
     slug: product?.slug || '',
     category_id: product?.category_id || '',
     description: product?.description || '',
-    images: product?.images?.length > 0
-      ? product.images
+    images: (product?.images?.length ?? 0) > 0
+      ? product!.images
       : product?.image_url
         ? [product.image_url]
         : [],
