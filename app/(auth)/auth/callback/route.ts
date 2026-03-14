@@ -30,7 +30,8 @@ export async function GET(request: Request) {
           if (!admin || !admin.is_active) {
             // Not an admin - sign out and redirect to login with error
             await supabase.auth.signOut()
-            const loginUrl = new URL('/admin/login', requestUrl.origin)
+            const loginUrl = new URL('/login', requestUrl.origin)
+            loginUrl.searchParams.set('role', 'admin')
             loginUrl.searchParams.set('error', 'not_admin')
             return NextResponse.redirect(loginUrl)
           }

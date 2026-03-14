@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@supabase/supabase-js'
 import { sendWhatsAppMessage, formatOtpMessage } from '@/lib/whatsapp'
 
 const OTP_EXPIRY_MINUTES = 10
@@ -54,6 +55,91 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = normalizePhone(phone)
     const supabase = createAdminClient()
 
+    // Check if user already exists in profiles
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('phone', normalizedPhone)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    // If user already registered, auto-login without OTP
+    if (existingProfile) {
+      const email = `${normalizedPhone}@whatsapp.sayurku.local`
+      const password = `wa_${normalizedPhone}_${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-10)}`
+
+      // Check if auth user exists
+      const { data: authUser, error: getUserError } = await supabase.auth.admin.getUserById(existingProfile.id)
+
+      if (getUserError || !authUser?.user) {
+        // Auth user doesn't exist, create it with the existing profile's id
+        const { error: createError } = await supabase.auth.admin.createUser({
+          id: existingProfile.id,
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            phone: normalizedPhone,
+            auth_provider: 'whatsapp',
+          },
+        })
+
+        if (createError) {
+          console.error('Create auth user for existing profile error:', createError)
+          return NextResponse.json(
+            { error: 'Gagal membuat akun: ' + createError.message },
+            { status: 500 }
+          )
+        }
+      } else {
+        // Auth user exists, update password
+        const { error: updateError } = await supabase.auth.admin.updateUserById(existingProfile.id, {
+          password,
+          email,
+        })
+
+        if (updateError) {
+          console.error('Update user error:', updateError)
+          return NextResponse.json(
+            { error: 'Gagal update akun: ' + updateError.message },
+            { status: 500 }
+          )
+        }
+      }
+
+      // Create session for existing user
+      const authClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+
+      const { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (signInError || !signInData.session) {
+        console.error('Sign in error:', signInError)
+        return NextResponse.json(
+          { error: 'Gagal membuat sesi: ' + signInError?.message },
+          { status: 500 }
+        )
+      }
+
+      return NextResponse.json({
+        success: true,
+        registered: true,
+        message: 'Login berhasil',
+        phone: normalizedPhone,
+        session: {
+          access_token: signInData.session.access_token,
+          refresh_token: signInData.session.refresh_token,
+        },
+      })
+    }
+
+    // User not registered - proceed with OTP flow
     // Check rate limit
     const rateLimitTime = new Date()
     rateLimitTime.setMinutes(rateLimitTime.getMinutes() - RATE_LIMIT_MINUTES)
@@ -109,6 +195,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      registered: false,
       message: 'OTP berhasil dikirim',
       phone: normalizedPhone,
     })

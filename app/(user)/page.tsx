@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ProductCard } from '@/components/user/ProductCard'
 import { CategoryGrid } from '@/components/user/CategoryGrid'
 import { PromoProductsCarousel } from '@/components/user/PromoProductsCarousel'
+import { InquiryBanner } from '@/components/user/InquiryBanner'
 
 export default async function HomePage() {
   const supabase = createClient()
@@ -46,6 +47,11 @@ export default async function HomePage() {
 
   return (
     <div className="container px-4 py-4 space-y-6">
+      {/* Inquiry Banner - Spotlight */}
+      <section>
+        <InquiryBanner />
+      </section>
+
       {/* Kategori */}
       <section>
         <h2 className="text-lg font-bold mb-3">Kategori</h2>

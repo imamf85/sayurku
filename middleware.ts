@@ -13,7 +13,7 @@ function getAdminClient() {
 }
 
 // Public routes that don't need auth check
-const publicRoutes = ['/', '/product', '/category', '/search', '/login', '/admin/login']
+const publicRoutes = ['/', '/product', '/category', '/search', '/login']
 
 function isPublicRoute(pathname: string) {
   return publicRoutes.some(route =>
@@ -71,7 +71,10 @@ export async function middleware(request: NextRequest) {
 
       if (isProtected) {
         const url = request.nextUrl.clone()
-        url.pathname = pathname.startsWith('/admin') ? '/admin/login' : '/login'
+        url.pathname = '/login'
+        if (pathname.startsWith('/admin')) {
+          url.searchParams.set('role', 'admin')
+        }
         url.searchParams.set('redirect', pathname)
         url.searchParams.set('expired', '1')
         return NextResponse.redirect(url)
@@ -116,9 +119,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // Admin routes protection
-  if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
+  if (pathname.startsWith('/admin')) {
     if (!user?.email) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+      const url = new URL('/login', request.url)
+      url.searchParams.set('role', 'admin')
+      return NextResponse.redirect(url)
     }
 
     const adminClient = getAdminClient()
@@ -129,7 +134,9 @@ export async function middleware(request: NextRequest) {
       .single()
 
     if (!admin || !admin.is_active) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+      const url = new URL('/login', request.url)
+      url.searchParams.set('role', 'admin')
+      return NextResponse.redirect(url)
     }
   }
 

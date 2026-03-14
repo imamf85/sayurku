@@ -1,12 +1,12 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, MessageCircle, ArrowLeft, User } from 'lucide-react'
+import { Loader2, MessageCircle, ArrowLeft, User, LogIn } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,33 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 
 type LoginStep = 'phone' | 'otp'
+type Role = 'customer' | 'admin'
+
+function GoogleIcon() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  )
+}
 
 function LoginContent() {
   const [phone, setPhone] = useState('')
@@ -27,12 +52,25 @@ function LoginContent() {
   const [showNameModal, setShowNameModal] = useState(false)
   const [fullName, setFullName] = useState('')
   const [savingName, setSavingName] = useState(false)
+  const [role, setRole] = useState<Role>('customer')
+  const [checkingAuth, setCheckingAuth] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const hasCheckedAdmin = useRef(false)
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect') || '/'
   const expired = searchParams.get('expired')
   const error = searchParams.get('error')
+  const roleParam = searchParams.get('role')
+  const logoutParam = searchParams.get('logout')
   const { toast } = useToast()
   const supabase = createClient()
+
+  // Set initial role from URL param
+  useEffect(() => {
+    if (roleParam === 'admin') {
+      setRole('admin')
+    }
+  }, [roleParam])
 
   // Show messages based on URL params
   useEffect(() => {
@@ -49,13 +87,57 @@ function LoginContent() {
         description: 'Silakan login menggunakan nomor WhatsApp Anda',
         variant: 'destructive',
       })
-      // Clear the URL param
       window.history.replaceState({}, '', '/login')
+    }
+    if (error === 'not_admin') {
+      toast({
+        title: 'Akses ditolak',
+        description: 'Email Anda tidak terdaftar sebagai admin',
+        variant: 'destructive',
+      })
+      window.history.replaceState({}, '', '/login?role=admin')
     }
   }, [expired, error, toast])
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Check if admin is already logged in (only for admin role)
+  useEffect(() => {
+    if (role !== 'admin' || hasCheckedAdmin.current) return
+    hasCheckedAdmin.current = true
+
+    const checkAdminAuth = async () => {
+      if (logoutParam === 'true') {
+        await supabase.auth.signOut()
+        window.history.replaceState({}, '', '/login?role=admin')
+        return
+      }
+
+      if (expired === '1') {
+        await supabase.auth.signOut()
+        return
+      }
+
+      setCheckingAuth(true)
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        const res = await fetch('/api/admin/check-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email }),
+        })
+        const data = await res.json()
+
+        if (data.isAdmin) {
+          setIsAdmin(true)
+        }
+      }
+      setCheckingAuth(false)
+    }
+
+    checkAdminAuth()
+  }, [role, logoutParam, expired, supabase.auth])
+
+  const sendOtpRequest = async () => {
     setLoading(true)
 
     try {
@@ -77,6 +159,34 @@ function LoginContent() {
         return
       }
 
+      // User already registered - auto login without OTP
+      if (data.registered && data.session) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
+
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          toast({
+            title: 'Error',
+            description: 'Gagal menyimpan sesi',
+            variant: 'destructive',
+          })
+          setLoading(false)
+          return
+        }
+
+        toast({
+          title: 'Login Berhasil',
+          description: 'Selamat datang kembali!',
+        })
+
+        window.location.href = redirect
+        return
+      }
+
+      // New user - proceed with OTP verification
       setNormalizedPhone(data.phone)
       setStep('otp')
       toast({
@@ -92,6 +202,11 @@ function LoginContent() {
     }
 
     setLoading(false)
+  }
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await sendOtpRequest()
   }
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -211,12 +326,81 @@ function LoginContent() {
     setSavingName(false)
   }
 
+  const handleGoogleLogin = async () => {
+    setLoading(true)
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?redirect=/admin`,
+      },
+    })
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      })
+      setLoading(false)
+    }
+  }
+
   const handleBackToPhone = () => {
     setStep('phone')
     setOtp('')
   }
 
-  if (step === 'otp') {
+  const handleRoleChange = (newRole: Role) => {
+    setRole(newRole)
+    // Reset admin check when switching to admin
+    if (newRole === 'admin') {
+      hasCheckedAdmin.current = false
+    }
+    // Update URL without full reload
+    const url = new URL(window.location.href)
+    if (newRole === 'admin') {
+      url.searchParams.set('role', 'admin')
+    } else {
+      url.searchParams.delete('role')
+    }
+    window.history.replaceState({}, '', url.toString())
+  }
+
+  // Loading state for admin auth check
+  if (role === 'admin' && checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    )
+  }
+
+  // Admin already logged in - show dashboard button
+  if (role === 'admin' && isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-green-600 mb-2">Sayurku</h1>
+            <p className="text-gray-600">Anda sudah masuk sebagai admin</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+            <Link href="/admin">
+              <Button className="w-full h-12 gap-3 text-base font-medium bg-green-600 hover:bg-green-700">
+                <LogIn className="h-5 w-5" />
+                Masuk ke Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // OTP verification step (customer only)
+  if (step === 'otp' && role === 'customer') {
     return (
       <>
         <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
@@ -273,7 +457,7 @@ function LoginContent() {
               </form>
 
               <button
-                onClick={handleSendOtp}
+                onClick={sendOtpRequest}
                 disabled={loading}
                 className="w-full mt-4 text-sm text-green-600 hover:text-green-700"
               >
@@ -333,48 +517,105 @@ function LoginContent() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-green-600 mb-2">Sayurku</h1>
-          <p className="text-gray-600">Masuk untuk melanjutkan belanja</p>
+          <p className="text-gray-600">Masuk untuk melanjutkan</p>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <form onSubmit={handleSendOtp}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="phone">Nomor WhatsApp</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="08xxxxxxxxxx"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                  required
-                  className="mt-1"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Contoh: 081234567890
-                </p>
+          {/* Role Selector Tabs */}
+          <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => handleRoleChange('customer')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                role === 'customer'
+                  ? 'bg-white text-green-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRoleChange('admin')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                role === 'admin'
+                  ? 'bg-white text-green-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Admin
+            </button>
+          </div>
+
+          {/* Customer Login Form */}
+          {role === 'customer' && (
+            <form onSubmit={handleSendOtp}>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="phone">Nomor WhatsApp</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="08xxxxxxxxxx"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                    required
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Contoh: 081234567890
+                  </p>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-green-600 hover:bg-green-700"
+                  disabled={loading || phone.length < 10}
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <MessageCircle className="w-5 h-5 mr-2" />
+                      Lanjutkan
+                    </>
+                  )}
+                </Button>
               </div>
+            </form>
+          )}
+
+          {/* Admin Login Form */}
+          {role === 'admin' && (
+            <div className="space-y-4">
               <Button
-                type="submit"
-                className="w-full h-12 bg-green-600 hover:bg-green-700"
-                disabled={loading || phone.length < 10}
+                type="button"
+                variant="outline"
+                className="w-full h-12 gap-3 text-base font-medium"
+                onClick={handleGoogleLogin}
+                disabled={loading}
               >
                 {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <MessageCircle className="w-5 h-5 mr-2" />
-                    Kirim OTP via WhatsApp
+                    <GoogleIcon />
+                    Masuk dengan Google
                   </>
                 )}
               </Button>
+
+              <p className="text-xs text-gray-500 text-center">
+                Hanya email yang terdaftar sebagai admin yang dapat mengakses dashboard
+              </p>
             </div>
-          </form>
+          )}
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          Dengan masuk, Anda menyetujui Syarat & Ketentuan kami
+          {role === 'customer'
+            ? 'Dengan masuk, Anda menyetujui Syarat & Ketentuan kami'
+            : 'Hubungi administrator jika Anda belum terdaftar'}
         </p>
       </div>
     </div>
