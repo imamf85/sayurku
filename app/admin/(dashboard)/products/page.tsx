@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Pencil } from 'lucide-react'
+import { Plus, Pencil, Upload } from 'lucide-react'
 import { formatPrice, formatUnit } from '@/lib/utils'
 
 export default async function ProductsPage() {
@@ -21,12 +21,20 @@ export default async function ProductsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Produk</h1>
-        <Link href="/admin/products/new">
-          <Button className="bg-green-600 hover:bg-green-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Tambah Produk
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/products/bulk">
+            <Button variant="outline">
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Upload
+            </Button>
+          </Link>
+          <Link href="/admin/products/new">
+            <Button className="bg-green-600 hover:bg-green-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Produk
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
