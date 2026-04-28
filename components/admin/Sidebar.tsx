@@ -125,7 +125,7 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
                 {isSuperAdmin ? 'Super Admin' : 'Admin'}
               </p>
             </div>
-            <Link href="/admin/login?logout=true">
+            <Link href="/login?role=admin&logout=true">
               <Button variant="ghost" size="icon">
                 <LogOut className="h-5 w-5 text-gray-500" />
               </Button>
