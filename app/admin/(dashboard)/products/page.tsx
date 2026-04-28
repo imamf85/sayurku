@@ -8,20 +8,34 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Pencil, Upload, ImageIcon } from 'lucide-react'
 import { formatPrice, formatUnit } from '@/lib/utils'
+import { ProductSearch } from '@/components/admin/ProductSearch'
 
-export default async function ProductsPage() {
+interface ProductsPageProps {
+  searchParams: Promise<{ search?: string }>
+}
+
+export default async function ProductsPage({ searchParams }: ProductsPageProps) {
   const supabase = createAdminClient()
+  const { search } = await searchParams
 
-  const { data: products } = await supabase
+  let query = supabase
     .from('products')
     .select('*, category:categories(name)')
     .order('created_at', { ascending: false })
 
+  if (search) {
+    query = query.ilike('name', `%${search}%`)
+  }
+
+  const { data: products } = await query
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">Produk</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <ProductSearch />
+          <div className="flex gap-2">
           <Link href="/admin/products/images">
             <Button variant="outline">
               <ImageIcon className="h-4 w-4 mr-2" />
@@ -40,6 +54,7 @@ export default async function ProductsPage() {
               Tambah Produk
             </Button>
           </Link>
+          </div>
         </div>
       </div>
 
