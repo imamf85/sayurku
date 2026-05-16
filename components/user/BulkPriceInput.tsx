@@ -141,7 +141,7 @@ export function BulkPriceInput({
       <Tabs value={inputMode} onValueChange={handleModeChange} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="nominal">Nominal (Rp)</TabsTrigger>
-          <TabsTrigger value="gram">Gram</TabsTrigger>
+          <TabsTrigger value="gram">Berat (Gram)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="nominal" className="space-y-3 mt-3">
