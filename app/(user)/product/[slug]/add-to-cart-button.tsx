@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Minus, Plus, ShoppingCart, Loader2 } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, Loader2, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BulkPriceInput } from '@/components/user/BulkPriceInput'
 import { createClient } from '@/lib/supabase/client'
@@ -26,18 +26,17 @@ export function AddToCartButton({
 }: AddToCartButtonProps) {
   const [quantity, setQuantity] = useState(isBulkPricing ? bulkMinPrice : 1)
   const [loading, setLoading] = useState(false)
+  const [buyNowLoading, setBuyNowLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
 
-  const handleAddToCart = async () => {
-    setLoading(true)
-
+  const addToCart = async (): Promise<boolean> => {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
       router.push(`/login?redirect=${window.location.pathname}`)
-      return
+      return false
     }
 
     const { data: existingItem } = await supabase
@@ -59,8 +58,7 @@ export function AddToCartButton({
             description: `Maksimal ${formatPrice(maxNominal)}`,
             variant: 'destructive',
           })
-          setLoading(false)
-          return
+          return false
         }
 
         await supabase
@@ -84,8 +82,7 @@ export function AddToCartButton({
             description: `Maksimal ${stock} item`,
             variant: 'destructive',
           })
-          setLoading(false)
-          return
+          return false
         }
 
         await supabase
@@ -101,14 +98,36 @@ export function AddToCartButton({
       }
     }
 
-    toast({
-      title: 'Berhasil ditambahkan',
-      description: 'Produk berhasil ditambahkan ke keranjang',
-    })
+    return true
+  }
 
-    router.refresh()
+  const handleAddToCart = async () => {
+    setLoading(true)
+    const success = await addToCart()
+
+    if (success) {
+      toast({
+        title: 'Berhasil ditambahkan',
+        description: 'Produk berhasil ditambahkan ke keranjang',
+      })
+      router.refresh()
+    }
+
     setLoading(false)
   }
+
+  const handleBuyNow = async () => {
+    setBuyNowLoading(true)
+    const success = await addToCart()
+
+    if (success) {
+      router.push('/checkout')
+    } else {
+      setBuyNowLoading(false)
+    }
+  }
+
+  const isLoading = loading || buyNowLoading
 
   // Render bulk pricing input
   if (isBulkPricing) {
@@ -122,60 +141,93 @@ export function AddToCartButton({
           onChange={setQuantity}
         />
 
-        <Button
-          className="w-full h-12 bg-green-600 hover:bg-green-700"
-          onClick={handleAddToCart}
-          disabled={loading || stock === 0}
-        >
-          {loading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <>
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              Tambah ke Keranjang
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            className="flex-1 h-12 bg-green-600 hover:bg-green-700"
+            onClick={handleAddToCart}
+            disabled={isLoading || stock === 0}
+          >
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <ShoppingCart className="h-5 w-5 mr-2" />
+                Tambah ke Keranjang
+              </>
+            )}
+          </Button>
+          <Button
+            className="flex-1 h-12 bg-orange-500 hover:bg-orange-600"
+            onClick={handleBuyNow}
+            disabled={isLoading || stock === 0}
+          >
+            {buyNowLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <Zap className="h-5 w-5 mr-2" />
+                Bayar Sekarang
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     )
   }
 
   // Render regular quantity selector
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-2 border rounded-lg p-1">
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 border rounded-lg p-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+            disabled={quantity <= 1}
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          <span className="w-8 text-center font-medium">{quantity}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setQuantity(Math.min(stock, quantity + 1))}
+            disabled={quantity >= stock}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
         <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => setQuantity(Math.max(1, quantity - 1))}
-          disabled={quantity <= 1}
+          className="flex-1 h-12 bg-green-600 hover:bg-green-700"
+          onClick={handleAddToCart}
+          disabled={isLoading || stock === 0}
         >
-          <Minus className="h-4 w-4" />
-        </Button>
-        <span className="w-8 text-center font-medium">{quantity}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-          disabled={quantity >= stock}
-        >
-          <Plus className="h-4 w-4" />
+          {loading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <>
+              <ShoppingCart className="h-5 w-5 mr-2" />
+              {formatPrice(price * quantity)}
+            </>
+          )}
         </Button>
       </div>
 
       <Button
-        className="flex-1 h-12 bg-green-600 hover:bg-green-700"
-        onClick={handleAddToCart}
-        disabled={loading || stock === 0}
+        className="w-full h-12 bg-orange-500 hover:bg-orange-600"
+        onClick={handleBuyNow}
+        disabled={isLoading || stock === 0}
       >
-        {loading ? (
+        {buyNowLoading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
           <>
-            <ShoppingCart className="h-5 w-5 mr-2" />
-            {formatPrice(price * quantity)}
+            <Zap className="h-5 w-5 mr-2" />
+            Bayar Sekarang
           </>
         )}
       </Button>
