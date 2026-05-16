@@ -260,3 +260,23 @@ export function getPromoStatusColor(status: 'active' | 'inactive' | 'scheduled' 
   }
   return colors[status]
 }
+
+/**
+ * Calculate nominal from gram for bulk pricing products
+ * @param grams - Weight in grams
+ * @param pricePerKg - Price per kilogram
+ * @returns Nominal in Rupiah
+ */
+export function calculateNominalFromGram(grams: number, pricePerKg: number): number {
+  if (pricePerKg <= 0) return 0
+  return Math.ceil((grams / 1000) * pricePerKg)
+}
+
+/**
+ * Get maximum gram that can be purchased based on stock
+ * @param stock - Stock in kg
+ * @returns Maximum gram
+ */
+export function getMaxBulkGram(stock: number): number {
+  return stock * 1000
+}
