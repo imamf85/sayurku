@@ -80,18 +80,34 @@ export function formatDateTime(date: string | Date): string {
   }).format(new Date(date))
 }
 
+/**
+ * Get available delivery slots based on selected date
+ * @param slots - All delivery slots
+ * @param isForToday - Whether the selected date is today
+ * @param isPreorder - Whether cart contains preorder items (all slots available)
+ * @returns Filtered available slots
+ */
 export function getAvailableDeliverySlots(
   slots: DeliverySlot[],
+  isForToday: boolean = true,
   isPreorder: boolean = false
 ): DeliverySlot[] {
+  // For preorder, return all slots except instant for future dates
   if (isPreorder) {
-    return slots
+    return slots.filter((slot) => slot.slot_type !== 'instant')
   }
 
+  // For future dates (not today), return only scheduled slots (no instant)
+  if (!isForToday) {
+    return slots.filter((slot) => slot.slot_type === 'scheduled')
+  }
+
+  // For today, filter based on current time
   const now = new Date()
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000)
 
   return slots.filter((slot) => {
+    // Instant delivery is only available for today
     if (slot.slot_type === 'instant') {
       return true
     }
@@ -102,8 +118,20 @@ export function getAvailableDeliverySlots(
     const slotStart = new Date(now)
     slotStart.setHours(hours, minutes, 0, 0)
 
+    // Slot must be at least 1 hour from now
     return oneHourLater < slotStart
   })
+}
+
+/**
+ * Check if today still has available delivery slots
+ * Used to determine if today should be shown as a delivery date option
+ * @param slots - All delivery slots
+ * @returns True if today has at least one available slot
+ */
+export function isTodayDeliveryAvailable(slots: DeliverySlot[]): boolean {
+  const availableSlots = getAvailableDeliverySlots(slots, true, false)
+  return availableSlots.length > 0
 }
 
 export function slugify(text: string): string {

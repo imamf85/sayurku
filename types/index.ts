@@ -156,6 +156,8 @@ export interface ProductSnapshot {
   is_bulk_pricing?: boolean
 }
 
+export type PaymentMethod = 'qris' | 'transfer' | 'cod'
+
 export interface Order {
   id: string
   user_id: string
@@ -169,9 +171,11 @@ export interface Order {
   delivery_date: string
   delivery_slot: string
   notes: string | null
-  payment_method: string | null
+  payment_method: PaymentMethod | null
   payment_id: string | null
   paid_at: string | null
+  payment_proof_url: string | null
+  payment_token: string | null
   tracking_token: string | null
   received_by: string | null
   delivery_proof_url: string | null

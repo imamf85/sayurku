@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format, addDays, isSameDay } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { DeliverySlot } from '@/types'
-import { getAvailableDeliverySlots } from '@/lib/utils'
+import { getAvailableDeliverySlots, isTodayDeliveryAvailable } from '@/lib/utils'
 
 interface DeliverySlotPickerProps {
   slots: DeliverySlot[]
@@ -24,16 +24,48 @@ export function DeliverySlotPicker({
   onDateChange,
   onSlotChange,
   isPreorder = false,
-  minDate = new Date(),
+  minDate,
 }: DeliverySlotPickerProps) {
   const [showAllDates, setShowAllDates] = useState(false)
 
+  // For preorder, minDate is already set by parent
+  // For regular orders, check if today is still available
+  const today = new Date()
+  const todayHasSlots = !isPreorder && isTodayDeliveryAvailable(slots)
+
+  // Determine the actual starting date
+  // If it's preorder, use minDate from parent
+  // If today has no slots available, start from tomorrow
+  const effectiveMinDate = isPreorder && minDate
+    ? minDate
+    : todayHasSlots
+      ? today
+      : addDays(today, 1)
+
   const dates = Array.from({ length: showAllDates ? 14 : 5 }, (_, i) =>
-    addDays(minDate, i)
+    addDays(effectiveMinDate, i)
   )
 
-  const isToday = selectedDate && isSameDay(selectedDate, new Date())
-  const availableSlots = getAvailableDeliverySlots(slots, isPreorder || !isToday)
+  // Auto-select first available date if selected date is not valid
+  useEffect(() => {
+    if (!selectedDate || (isSameDay(selectedDate, today) && !todayHasSlots)) {
+      onDateChange(effectiveMinDate)
+    }
+  }, [todayHasSlots])
+
+  const isToday = selectedDate && isSameDay(selectedDate, today)
+
+  // Get available slots for the selected date
+  // isForToday: true if selected date is today
+  // isPreorder: if cart has preorder items (instant slot should never appear)
+  const availableSlots = getAvailableDeliverySlots(slots, isToday || false, isPreorder)
+
+  // Clear selected slot if it's no longer available
+  useEffect(() => {
+    if (selectedSlot && !availableSlots.find(s => s.id === selectedSlot)) {
+      onSlotChange('')
+    }
+  }, [selectedDate, availableSlots, selectedSlot])
 
   return (
     <div className="space-y-4">
@@ -42,7 +74,7 @@ export function DeliverySlotPicker({
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
           {dates.map((date) => {
             const isSelected = selectedDate && isSameDay(date, selectedDate)
-            const dateIsToday = isSameDay(date, new Date())
+            const dateIsToday = isSameDay(date, today)
             return (
               <button
                 key={date.toISOString()}

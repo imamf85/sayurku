@@ -2,21 +2,24 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { addDays } from 'date-fns'
-import { ChevronRight, MapPin, Plus, Loader2 } from 'lucide-react'
+import { MapPin, Plus, Loader2, QrCode, Building2, Wallet, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { DeliverySlotPicker } from '@/components/user/DeliverySlotPicker'
-import { CartItem, Address, Profile, DeliverySlot } from '@/types'
+import { CartItem, Address, Profile, DeliverySlot, PaymentMethod } from '@/types'
 import {
   formatPrice,
   generateOrderNumber,
   calculateCartItemTotal,
   calculateBulkWeight,
   formatBulkWeight,
+  isTodayDeliveryAvailable,
+  cn,
 } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
@@ -30,6 +33,27 @@ interface CheckoutFormProps {
   hasPreorder: boolean
   maxPreorderDays: number
 }
+
+const PAYMENT_METHODS = [
+  {
+    id: 'qris' as PaymentMethod,
+    name: 'QRIS',
+    description: 'Scan QR untuk bayar',
+    icon: QrCode,
+  },
+  {
+    id: 'transfer' as PaymentMethod,
+    name: 'Transfer Bank',
+    description: 'BCA / Mandiri',
+    icon: Building2,
+  },
+  {
+    id: 'cod' as PaymentMethod,
+    name: 'Bayar di Tempat',
+    description: 'Cash on Delivery',
+    icon: Wallet,
+  },
+]
 
 export function CheckoutForm({
   cartItems,
@@ -48,13 +72,22 @@ export function CheckoutForm({
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(
     addresses.find((a) => a.is_default) || addresses[0] || null
   )
-  const [deliveryDate, setDeliveryDate] = useState<Date | null>(
-    hasPreorder ? addDays(new Date(), maxPreorderDays) : new Date()
-  )
+
+  // Determine initial delivery date
+  const getInitialDeliveryDate = () => {
+    if (hasPreorder) {
+      return addDays(new Date(), maxPreorderDays)
+    }
+    const todayHasSlots = isTodayDeliveryAvailable(deliverySlots)
+    return todayHasSlots ? new Date() : addDays(new Date(), 1)
+  }
+
+  const [deliveryDate, setDeliveryDate] = useState<Date | null>(getInitialDeliveryDate)
   const [deliverySlot, setDeliverySlot] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qris')
 
   const [fullName, setFullName] = useState(profile?.full_name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
@@ -123,6 +156,10 @@ export function CheckoutForm({
     })
   }
 
+  const generatePaymentToken = () => {
+    return `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
+  }
+
   const handleSubmit = async () => {
     if (!selectedAddress) {
       toast({
@@ -176,13 +213,22 @@ export function CheckoutForm({
 
       const orderNumber = generateOrderNumber()
 
+      // Generate payment token for QRIS/Transfer
+      const paymentToken = paymentMethod !== 'cod' ? generatePaymentToken() : null
+
+      // Set status based on payment method
+      // COD: processing (ready to be prepared)
+      // QRIS/Transfer: pending_payment (waiting for payment)
+      const orderStatus = paymentMethod === 'cod' ? 'processing' : 'pending_payment'
+
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: user.id,
           order_number: orderNumber,
-          status: 'processing',
-          payment_method: 'cod',
+          status: orderStatus,
+          payment_method: paymentMethod,
+          payment_token: paymentToken,
           subtotal,
           discount,
           voucher_id: appliedVoucher?.id,
@@ -240,9 +286,8 @@ export function CheckoutForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: order.id }),
-      }).catch(console.error) // Don't block redirect if notification fails
+      }).catch(console.error)
 
-      // Refresh to invalidate cart count cache, then redirect
       router.refresh()
       router.push(`/payment/${order.id}`)
     } catch (error) {
@@ -256,8 +301,6 @@ export function CheckoutForm({
       setLoading(false)
     }
   }
-
-  const minDate = hasPreorder ? addDays(new Date(), maxPreorderDays) : new Date()
 
   return (
     <div className="container px-4 py-4 pb-32">
@@ -333,8 +376,44 @@ export function CheckoutForm({
           onDateChange={setDeliveryDate}
           onSlotChange={setDeliverySlot}
           isPreorder={hasPreorder}
-          minDate={minDate}
+          minDate={hasPreorder ? addDays(new Date(), maxPreorderDays) : undefined}
         />
+      </section>
+
+      <section className="bg-white rounded-lg p-4 mb-4">
+        <h2 className="font-medium mb-3">Metode Pembayaran</h2>
+        <div className="space-y-2">
+          {PAYMENT_METHODS.map((method) => {
+            const Icon = method.icon
+            const isSelected = paymentMethod === method.id
+            return (
+              <button
+                key={method.id}
+                onClick={() => setPaymentMethod(method.id)}
+                className={cn(
+                  'w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left',
+                  isSelected
+                    ? 'border-green-600 bg-green-50'
+                    : 'border-gray-200 hover:border-green-300'
+                )}
+              >
+                <div className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center',
+                  isSelected ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'
+                )}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">{method.name}</p>
+                  <p className="text-sm text-gray-500">{method.description}</p>
+                </div>
+                {isSelected && (
+                  <Check className="h-5 w-5 text-green-600" />
+                )}
+              </button>
+            )
+          })}
+        </div>
       </section>
 
       <section className="bg-white rounded-lg p-4 mb-4">
