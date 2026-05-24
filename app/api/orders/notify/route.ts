@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
     const addr = order.address_snapshot
     const fullAddress = `${addr.address}, ${addr.village ? addr.village + ', ' : ''}${addr.district}, ${addr.city}${addr.province ? ', ' + addr.province : ''} ${addr.postal_code}`
 
+    // Send notification to user
     if (customerPhone) {
       const trackingUrl = order.tracking_token
         ? `${APP_URL}/track/${order.tracking_token}`
@@ -194,23 +195,27 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const adminMessage = formatOrderMessageForAdmin(
-      order.id,
-      order.order_number,
-      customerName,
-      customerPhone,
-      order.total,
-      order.items?.length || 0,
-      order.payment_method,
-      deliveryDate,
-      order.delivery_slot.name,
-      fullAddress
-    )
+    // Only send notification to admin for COD orders
+    // For QRIS/Transfer, admin will be notified after payment confirmation
+    if (order.payment_method === 'cod') {
+      const adminMessage = formatOrderMessageForAdmin(
+        order.id,
+        order.order_number,
+        customerName,
+        customerPhone,
+        order.total,
+        order.items?.length || 0,
+        order.payment_method,
+        deliveryDate,
+        order.delivery_slot.name,
+        fullAddress
+      )
 
-    await sendWhatsAppMessage({
-      to: ADMIN_WHATSAPP,
-      message: adminMessage,
-    })
+      await sendWhatsAppMessage({
+        to: ADMIN_WHATSAPP,
+        message: adminMessage,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

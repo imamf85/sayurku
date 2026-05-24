@@ -4,6 +4,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { formatPrice } from '@/lib/utils'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
+const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '6281217571585'
 
 function formatPaymentConfirmedForUser(
   orderNumber: string,
@@ -25,6 +26,46 @@ ${trackingUrl}
 Terima kasih telah berbelanja di Sayurku!`
 }
 
+function formatOrderMessageForAdmin(
+  orderId: string,
+  orderNumber: string,
+  customerName: string,
+  customerPhone: string,
+  total: number,
+  itemCount: number,
+  paymentMethod: string,
+  deliveryDate: string,
+  deliverySlot: string,
+  address: string
+): string {
+  const orderUrl = `${APP_URL}/admin/orders/${orderId}`
+
+  const paymentMethodLabels: Record<string, string> = {
+    qris: 'QRIS',
+    transfer: 'Transfer Bank',
+    cod: 'COD',
+  }
+
+  const paymentLabel = paymentMethodLabels[paymentMethod] || paymentMethod
+
+  return `*Pesanan Baru Masuk - Sayurku*
+
+*No. Pesanan:* ${orderNumber}
+*Pelanggan:* ${customerName}
+*No. HP:* ${customerPhone}
+*Total:* ${formatPrice(total)}
+*Jumlah Item:* ${itemCount} item
+*Pembayaran:* ${paymentLabel} ✅ Sudah Dibayar
+
+*Pengiriman:*
+Tanggal: ${deliveryDate}
+Waktu: ${deliverySlot}
+Alamat: ${address}
+
+Lihat & proses pesanan:
+${orderUrl}`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { token } = await request.json()
@@ -38,10 +79,14 @@ export async function POST(request: NextRequest) {
 
     const adminSupabase = createAdminClient()
 
-    // Find order by payment token
+    // Find order by payment token with related data
     const { data: order, error: orderError } = await adminSupabase
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        items:order_items(*),
+        delivery_slot:delivery_slots(id, name)
+      `)
       .eq('payment_token', token)
       .single()
 
@@ -92,11 +137,15 @@ export async function POST(request: NextRequest) {
     // Get user profile to send notification
     const { data: profile } = await adminSupabase
       .from('profiles')
-      .select('phone')
+      .select('full_name, phone')
       .eq('id', order.user_id)
       .single()
 
-    if (profile?.phone) {
+    const customerName = profile?.full_name || 'Pelanggan'
+    const customerPhone = profile?.phone || ''
+
+    // Send notification to user
+    if (customerPhone) {
       const trackingUrl = order.tracking_token
         ? `${APP_URL}/track/${order.tracking_token}`
         : `${APP_URL}/orders`
@@ -108,10 +157,39 @@ export async function POST(request: NextRequest) {
       )
 
       await sendWhatsAppMessage({
-        to: profile.phone,
+        to: customerPhone,
         message: userMessage,
       })
     }
+
+    // Send notification to admin
+    const deliveryDate = new Date(order.delivery_date).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+
+    const addr = order.address_snapshot
+    const fullAddress = `${addr.address}, ${addr.village ? addr.village + ', ' : ''}${addr.district}, ${addr.city}${addr.province ? ', ' + addr.province : ''} ${addr.postal_code}`
+
+    const adminMessage = formatOrderMessageForAdmin(
+      order.id,
+      order.order_number,
+      customerName,
+      customerPhone,
+      order.total,
+      order.items?.length || 0,
+      order.payment_method,
+      deliveryDate,
+      order.delivery_slot.name,
+      fullAddress
+    )
+
+    await sendWhatsAppMessage({
+      to: ADMIN_WHATSAPP,
+      message: adminMessage,
+    })
 
     return NextResponse.json({
       success: true,
