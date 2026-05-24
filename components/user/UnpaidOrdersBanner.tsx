@@ -62,7 +62,7 @@ export function UnpaidOrdersBanner({ unpaidOrders }: UnpaidOrdersBannerProps) {
 
         {/* Action Buttons */}
         <div className="flex gap-2">
-          <Link href={`/payment/${oldestOrder.id}`} className="flex-1">
+          <Link href="/payments/pending" className="flex-1">
             <Button
               className="w-full bg-white text-red-600 hover:bg-red-50 font-medium"
               size="sm"
