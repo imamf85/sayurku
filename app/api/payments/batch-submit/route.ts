@@ -9,16 +9,20 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.a
 
 function formatBatchPaymentNotification(
   customerName: string,
+  customerPhone: string,
   orderCount: number,
   totalAmount: number,
   orderNumbers: string[],
-  paymentMethod: string
+  paymentMethod: string,
+  confirmationToken: string
 ): string {
   const methodLabel = paymentMethod === 'qris' ? 'QRIS' : 'Transfer Bank'
+  const confirmUrl = `${APP_URL}/confirm-batch-payment/${confirmationToken}`
 
   return `*Konfirmasi Pembayaran Batch - Sayurku*
 
 *Pelanggan:* ${customerName}
+*No. HP:* ${customerPhone}
 *Jumlah Pesanan:* ${orderCount} pesanan
 *Total:* ${formatPrice(totalAmount)}
 *Metode:* ${methodLabel}
@@ -28,8 +32,12 @@ ${orderNumbers.map((num, i) => `${i + 1}. ${num}`).join('\n')}
 
 Pelanggan telah upload bukti pembayaran untuk ${orderCount} pesanan sekaligus.
 
-Konfirmasi pembayaran:
-${APP_URL}/admin/orders`
+Konfirmasi pembayaran (tanpa login):
+${confirmUrl}`
+}
+
+function generateConfirmationToken(): string {
+  return `BATCH-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
 }
 
 export async function POST(request: NextRequest) {
@@ -89,6 +97,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Generate confirmation token
+    const confirmationToken = generateConfirmationToken()
+    const totalAmount = orders.reduce((sum, order) => sum + order.total, 0)
+
+    // Create batch payment record
+    const { data: batchPayment, error: batchError } = await adminSupabase
+      .from('batch_payments')
+      .insert({
+        user_id: user.id,
+        order_ids: orderIds,
+        payment_proof_url: paymentProofUrl,
+        payment_method: paymentMethod,
+        confirmation_token: confirmationToken,
+        status: 'pending',
+        total_amount: totalAmount,
+        order_count: orders.length,
+      })
+      .select()
+      .single()
+
+    if (batchError) {
+      throw batchError
+    }
+
     // Update all orders with payment proof
     const { error: updateError } = await adminSupabase
       .from('orders')
@@ -111,16 +143,18 @@ export async function POST(request: NextRequest) {
       .single()
 
     const customerName = profile?.full_name || 'Pelanggan'
-    const totalAmount = orders.reduce((sum, order) => sum + order.total, 0)
+    const customerPhone = profile?.phone || ''
     const orderNumbers = orders.map((o) => o.order_number)
 
     // Send WhatsApp notification to admin
     const adminMessage = formatBatchPaymentNotification(
       customerName,
+      customerPhone,
       orders.length,
       totalAmount,
       orderNumbers,
-      paymentMethod
+      paymentMethod,
+      confirmationToken
     )
 
     await sendWhatsAppMessage({
@@ -132,6 +166,7 @@ export async function POST(request: NextRequest) {
       success: true,
       orderCount: orders.length,
       totalAmount,
+      confirmationToken,
     })
   } catch (error) {
     console.error('Batch payment submit error:', error)
