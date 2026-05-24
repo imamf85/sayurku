@@ -3,11 +3,15 @@ import { ProductCard } from '@/components/user/ProductCard'
 import { CategoryGrid } from '@/components/user/CategoryGrid'
 import { PromoProductsCarousel } from '@/components/user/PromoProductsCarousel'
 import { InquiryBanner } from '@/components/user/InquiryBanner'
+import { UnpaidOrdersBanner } from '@/components/user/UnpaidOrdersBanner'
 
 export default async function HomePage() {
   const supabase = createClient()
 
-  const [categoriesRes, productsRes, promosRes] = await Promise.all([
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const [categoriesRes, productsRes, promosRes, unpaidOrdersRes] = await Promise.all([
     supabase
       .from('categories')
       .select('*')
@@ -26,11 +30,21 @@ export default async function HomePage() {
       .gte('end_date', new Date().toISOString())
       .lte('start_date', new Date().toISOString())
       .order('created_at', { ascending: false }),
+    // Fetch unpaid orders for logged-in users
+    user
+      ? supabase
+          .from('orders')
+          .select('id, order_number, total, created_at')
+          .eq('user_id', user.id)
+          .eq('status', 'pending_payment')
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] }),
   ])
 
   const categories = categoriesRes.data || []
   const products = productsRes.data || []
   const promos = promosRes.data || []
+  const unpaidOrders = unpaidOrdersRes.data || []
 
   // Map promos with their products for the carousel
   const promoProducts = promos
@@ -47,6 +61,13 @@ export default async function HomePage() {
 
   return (
     <div className="container px-4 py-4 space-y-6">
+      {/* Unpaid Orders Warning Banner */}
+      {user && unpaidOrders.length > 0 && (
+        <section>
+          <UnpaidOrdersBanner unpaidOrders={unpaidOrders} />
+        </section>
+      )}
+
       {/* Inquiry Banner - Spotlight */}
       <section>
         <InquiryBanner />
