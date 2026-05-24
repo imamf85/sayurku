@@ -11,18 +11,30 @@ function formatOrderMessageForUser(
   orderNumber: string,
   total: number,
   itemCount: number,
+  paymentMethod: string,
   deliveryDate: string,
   deliverySlot: string,
-  trackingUrl: string
+  trackingUrl: string,
+  paymentUrl?: string
 ): string {
-  return `*Pesanan Berhasil - Sayurku*
+  const paymentMethodLabels: Record<string, string> = {
+    cod: 'Bayar di Tempat (COD)',
+    qris: 'QRIS',
+    transfer: 'Transfer Bank',
+  }
+
+  const paymentLabel = paymentMethodLabels[paymentMethod] || paymentMethod
+
+  // For COD - order is confirmed
+  if (paymentMethod === 'cod') {
+    return `*Pesanan Berhasil - Sayurku*
 
 Terima kasih telah berbelanja di Sayurku!
 
 *No. Pesanan:* ${orderNumber}
 *Total:* ${formatPrice(total)}
 *Jumlah Item:* ${itemCount} item
-*Metode Pembayaran:* Bayar di Tempat (COD)
+*Metode Pembayaran:* ${paymentLabel}
 
 *Pengiriman:*
 Tanggal: ${deliveryDate}
@@ -34,6 +46,26 @@ Lacak pesanan Anda:
 ${trackingUrl}
 
 Terima kasih!`
+  }
+
+  // For QRIS/Transfer - waiting for payment
+  return `*Menunggu Pembayaran - Sayurku*
+
+Pesanan Anda telah dibuat, silakan selesaikan pembayaran.
+
+*No. Pesanan:* ${orderNumber}
+*Total:* ${formatPrice(total)}
+*Jumlah Item:* ${itemCount} item
+*Metode Pembayaran:* ${paymentLabel}
+
+*Pengiriman:*
+Tanggal: ${deliveryDate}
+Waktu: ${deliverySlot}
+
+Selesaikan pembayaran di:
+${paymentUrl}
+
+Terima kasih!`
 }
 
 function formatOrderMessageForAdmin(
@@ -43,11 +75,20 @@ function formatOrderMessageForAdmin(
   customerPhone: string,
   total: number,
   itemCount: number,
+  paymentMethod: string,
   deliveryDate: string,
   deliverySlot: string,
   address: string
 ): string {
   const orderUrl = `${APP_URL}/admin/orders/${orderId}`
+
+  const paymentMethodLabels: Record<string, string> = {
+    cod: 'COD',
+    qris: 'QRIS (Menunggu Pembayaran)',
+    transfer: 'Transfer Bank (Menunggu Pembayaran)',
+  }
+
+  const paymentLabel = paymentMethodLabels[paymentMethod] || paymentMethod
 
   return `*Pesanan Baru Masuk - Sayurku*
 
@@ -56,7 +97,7 @@ function formatOrderMessageForAdmin(
 *No. HP:* ${customerPhone}
 *Total:* ${formatPrice(total)}
 *Jumlah Item:* ${itemCount} item
-*Pembayaran:* COD
+*Pembayaran:* ${paymentLabel}
 
 *Pengiriman:*
 Tanggal: ${deliveryDate}
@@ -134,13 +175,17 @@ export async function POST(request: NextRequest) {
         ? `${APP_URL}/track/${order.tracking_token}`
         : `${APP_URL}/orders`
 
+      const paymentUrl = `${APP_URL}/payment/${order.id}`
+
       const userMessage = formatOrderMessageForUser(
         order.order_number,
         order.total,
         order.items?.length || 0,
+        order.payment_method,
         deliveryDate,
         order.delivery_slot.name,
-        trackingUrl
+        trackingUrl,
+        paymentUrl
       )
 
       await sendWhatsAppMessage({
@@ -156,6 +201,7 @@ export async function POST(request: NextRequest) {
       customerPhone,
       order.total,
       order.items?.length || 0,
+      order.payment_method,
       deliveryDate,
       order.delivery_slot.name,
       fullAddress
