@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { CheckCircle2, Wallet, Copy, Check, Loader2, FileText } from 'lucide-react'
+import { CheckCircle2, Wallet, Copy, Check, Loader2, FileText, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { PaymentProofUpload } from '@/components/user/PaymentProofUpload'
@@ -50,6 +50,33 @@ export function PaymentClient({ order }: PaymentClientProps) {
       description: `Nomor rekening ${accountNumber} disalin ke clipboard`,
     })
     setTimeout(() => setCopiedAccount(null), 2000)
+  }
+
+  const handleDownloadQRIS = async () => {
+    try {
+      const response = await fetch(QRIS_IMAGE_URL)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `QRIS-Sayurku-${order.order_number}.jpg`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: 'QRIS berhasil diunduh',
+        description: 'File tersimpan di folder Download',
+      })
+    } catch (error) {
+      console.error('Download error:', error)
+      toast({
+        title: 'Gagal mengunduh',
+        description: 'Terjadi kesalahan saat mengunduh QRIS',
+        variant: 'destructive',
+      })
+    }
   }
 
   const handleSubmitPayment = async () => {
@@ -200,6 +227,14 @@ export function PaymentClient({ order }: PaymentClientProps) {
                 className="object-contain"
               />
             </div>
+            <Button
+              variant="outline"
+              className="w-full mt-3"
+              onClick={handleDownloadQRIS}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download QRIS
+            </Button>
             <p className="text-sm text-gray-500 text-center mt-3">
               Scan menggunakan aplikasi e-wallet atau mobile banking Anda
             </p>
