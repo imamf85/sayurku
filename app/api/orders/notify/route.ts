@@ -78,9 +78,12 @@ function formatOrderMessageForAdmin(
   paymentMethod: string,
   deliveryDate: string,
   deliverySlot: string,
-  address: string
+  address: string,
+  managementToken: string | null
 ): string {
-  const orderUrl = `${APP_URL}/admin/orders/${orderId}`
+  const manageUrl = managementToken
+    ? `${APP_URL}/manage-order/${managementToken}`
+    : `${APP_URL}/admin/orders/${orderId}`
 
   const paymentMethodLabels: Record<string, string> = {
     cod: 'COD',
@@ -104,8 +107,8 @@ Tanggal: ${deliveryDate}
 Waktu: ${deliverySlot}
 Alamat: ${address}
 
-Lihat & update pesanan:
-${orderUrl}`
+Kelola pesanan (tanpa login):
+${manageUrl}`
 }
 
 export async function POST(request: NextRequest) {
@@ -208,7 +211,8 @@ export async function POST(request: NextRequest) {
         order.payment_method,
         deliveryDate,
         order.delivery_slot.name,
-        fullAddress
+        fullAddress,
+        order.management_token
       )
 
       await sendWhatsAppMessage({

@@ -177,6 +177,7 @@ export interface Order {
   payment_proof_url: string | null
   payment_token: string | null
   tracking_token: string | null
+  management_token: string | null
   received_by: string | null
   delivery_proof_url: string | null
   created_at: string

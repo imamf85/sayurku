@@ -160,6 +160,10 @@ export function CheckoutForm({
     return `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
   }
 
+  const generateManagementToken = () => {
+    return `MGT-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
+  }
+
   const handleSubmit = async () => {
     if (!selectedAddress) {
       toast({
@@ -216,6 +220,9 @@ export function CheckoutForm({
       // Generate payment token for QRIS/Transfer
       const paymentToken = paymentMethod !== 'cod' ? generatePaymentToken() : null
 
+      // Generate management token for admin order management
+      const managementToken = generateManagementToken()
+
       // Set status based on payment method
       // COD: processing (ready to be prepared)
       // QRIS/Transfer: pending_payment (waiting for payment)
@@ -229,6 +236,7 @@ export function CheckoutForm({
           status: orderStatus,
           payment_method: paymentMethod,
           payment_token: paymentToken,
+          management_token: managementToken,
           subtotal,
           discount,
           voucher_id: appliedVoucher?.id,
