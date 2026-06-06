@@ -31,6 +31,7 @@ interface ParsedProduct {
   price: number
   hasPrice: boolean
   isNewCategory: boolean
+  image_url?: string
 }
 
 const UNITS = [
@@ -117,11 +118,18 @@ export default function BulkUploadPage() {
           }
         }
 
+        // Parse image URL (column 4, optional)
+        let image_url: string | undefined
+        if (parts.length >= 4) {
+          const urlStr = parts[3].trim()
+          if (urlStr) image_url = urlStr
+        }
+
         // Check if category is new
         const isNewCategory = category !== '' && !existingCategoryNames.has(category.toLowerCase())
 
         if (name && category) {
-          products.push({ name, category, price, hasPrice, isNewCategory })
+          products.push({ name, category, price, hasPrice, isNewCategory, image_url })
         }
       }
     }
@@ -165,6 +173,7 @@ export default function BulkUploadPage() {
             name: p.name,
             category: p.category,
             price: p.price,
+            image_url: p.image_url || null,
           })),
           unit,
           unit_value: unitValue,
@@ -225,13 +234,13 @@ export default function BulkUploadPage() {
                 Paste Data dari Excel
               </CardTitle>
               <CardDescription>
-                Copy data dari Excel (3 kolom) lalu paste di bawah ini.
-                Format: Nama [TAB] Kategori [TAB] Harga
+                Copy data dari Excel lalu paste di bawah ini.
+                Format: Nama [TAB] Kategori [TAB] Harga [TAB] URL Gambar (opsional)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
-                placeholder={`Contoh:\nASAM JAWA\tBumbu Dapur\t8.000\nANTAKA BALADO\tBumbu Dapur\t6.000\nBAMBOE TOM YUM\tBumbu Instan\t8.000`}
+                placeholder={`Contoh:\nASAM JAWA\tBumbu Dapur\t8.000\thttps://example.com/asam-jawa.jpg\nANTAKA BALADO\tBumbu Dapur\t6.000\nBAMBOE TOM YUM\tBumbu Instan\t8.000\thttps://example.com/bamboe.jpg`}
                 value={rawData}
                 onChange={(e) => {
                   setRawData(e.target.value)
@@ -325,6 +334,7 @@ export default function BulkUploadPage() {
                         <th className="text-left p-2 font-medium">Nama Produk</th>
                         <th className="text-left p-2 font-medium">Kategori</th>
                         <th className="text-right p-2 font-medium">Harga</th>
+                        <th className="text-center p-2 font-medium">Foto</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -350,6 +360,21 @@ export default function BulkUploadPage() {
                               formatPrice(product.price)
                             ) : (
                               <span className="text-yellow-600">Rp 0</span>
+                            )}
+                          </td>
+                          <td className="p-2 text-center">
+                            {product.image_url ? (
+                              <img
+                                src={product.image_url}
+                                alt={product.name}
+                                className="w-10 h-10 object-cover rounded mx-auto"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none'
+                                  e.currentTarget.nextElementSibling?.removeAttribute('hidden')
+                                }}
+                              />
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
                             )}
                           </td>
                         </tr>

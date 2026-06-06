@@ -4,6 +4,7 @@ import { CategoryGrid } from '@/components/user/CategoryGrid'
 import { PromoProductsCarousel } from '@/components/user/PromoProductsCarousel'
 import { InquiryBanner } from '@/components/user/InquiryBanner'
 import { UnpaidOrdersBanner } from '@/components/user/UnpaidOrdersBanner'
+import { SearchBar } from '@/components/user/SearchBar'
 
 export default async function HomePage() {
   const supabase = createClient()
@@ -61,6 +62,11 @@ export default async function HomePage() {
 
   return (
     <div className="container px-4 py-4 space-y-6">
+      {/* Search bar — mobile only (desktop uses Navbar search) */}
+      <div className="md:hidden">
+        <SearchBar />
+      </div>
+
       {/* Unpaid Orders Warning Banner */}
       {user && unpaidOrders.length > 0 && (
         <section>

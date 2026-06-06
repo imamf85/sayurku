@@ -26,6 +26,7 @@ interface BulkProduct {
   name: string
   category: string
   price: number
+  image_url?: string | null
 }
 
 export async function POST(request: NextRequest) {
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest) {
       unit,
       unit_value,
       stock,
+      image_url: product.image_url || null,
       is_active: product.price > 0, // Set inactive if price is 0
     }
   })

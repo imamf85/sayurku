@@ -93,14 +93,37 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const adminClient = createAdminClient()
+
+  // Bulk delete via JSON body: { ids: string[] }
+  const contentType = request.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const body = await request.json()
+    const ids: string[] = body.ids
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ error: 'IDs tidak boleh kosong' }, { status: 400 })
+    }
+
+    const { error } = await adminClient
+      .from('products')
+      .delete()
+      .in('id', ids)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true, deleted: ids.length })
+  }
+
+  // Single delete via query param: ?id=xxx (backward compat)
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
 
   if (!id) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 })
   }
-
-  const adminClient = createAdminClient()
 
   const { error } = await adminClient
     .from('products')

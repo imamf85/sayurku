@@ -1,34 +1,49 @@
 import { createClient } from '@/lib/supabase/server'
-import { SearchBar } from '@/components/user/SearchBar'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ProductCard } from '@/components/user/ProductCard'
 import { NoResultsInquiry } from '@/components/user/NoResultsInquiry'
+import { SearchBar } from '@/components/user/SearchBar'
 
 interface SearchPageProps {
   searchParams: { q?: string }
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const query = searchParams.q || ''
-  const supabase = createClient()
+  const query = searchParams.q?.trim() ?? ''
 
   let products: any[] = []
 
   if (query) {
-    const { data } = await supabase
+    const adminClient = createAdminClient()
+
+    // Expand with synonyms
+    const { data: synonymRow } = await adminClient
+      .from('search_synonyms')
+      .select('synonyms')
+      .eq('keyword', query.toLowerCase())
+      .maybeSingle()
+
+    const allTerms = Array.from(
+      new Set([query.toLowerCase(), ...(synonymRow?.synonyms ?? [])])
+    )
+
+    const nameFilter = allTerms.map((t) => `name.ilike.%${t}%`).join(',')
+
+    const { data } = await adminClient
       .from('products')
       .select('*, category:categories(*)')
       .eq('is_active', true)
-      .ilike('name', `%${query}%`)
+      .or(nameFilter)
       .order('name')
       .limit(50)
 
-    products = data || []
+    products = data ?? []
   }
 
   return (
     <div className="container px-4 py-4">
       <div className="mb-6">
-        <SearchBar defaultValue={query} autoFocus={!query} />
+        <SearchBar placeholder={query || 'Cari sayur, buah, bumbu...'} />
       </div>
 
       {query ? (
@@ -47,10 +62,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           )}
         </>
       ) : (
-        <div className="text-center py-12">
-          <p className="text-gray-500">
-            Cari sayur, buah, atau produk lainnya
-          </p>
+        <div className="text-center py-12 text-gray-400">
+          <p>Cari sayur, buah, atau produk lainnya</p>
         </div>
       )}
     </div>
