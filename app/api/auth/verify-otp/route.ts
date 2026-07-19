@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@supabase/supabase-js'
+import { TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_TTL_DAYS, trustDevice } from '@/lib/trusted-device'
 
 const MAX_ATTEMPTS = 5
 
@@ -234,7 +235,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
+    const deviceToken = await trustDevice(supabase, userId, request.headers.get('user-agent'))
+
+    const response = NextResponse.json({
       success: true,
       message: 'Verifikasi berhasil',
       session: {
@@ -243,6 +246,16 @@ export async function POST(request: NextRequest) {
       },
       needsName,
     })
+
+    response.cookies.set(TRUSTED_DEVICE_COOKIE, deviceToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: TRUSTED_DEVICE_TTL_DAYS * 24 * 60 * 60,
+    })
+
+    return response
   } catch (error) {
     console.error('Verify OTP error:', error)
     return NextResponse.json(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@supabase/supabase-js'
 import { sendWhatsAppMessage, formatOtpMessage } from '@/lib/whatsapp'
+import { TRUSTED_DEVICE_COOKIE, isDeviceTrusted } from '@/lib/trusted-device'
 
 const OTP_EXPIRY_MINUTES = 10
 const MAX_OTP_REQUESTS = 3
@@ -64,8 +65,16 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
-    // If user already registered, auto-login without OTP
-    if (existingProfile) {
+    // If user already registered AND this device already completed OTP
+    // verification before, auto-login without OTP. Otherwise fall through
+    // to the normal OTP flow below - knowing a phone number alone must
+    // never be enough to log in as that user.
+    const deviceToken = request.cookies.get(TRUSTED_DEVICE_COOKIE)?.value
+    const trustedDevice = existingProfile && deviceToken
+      ? await isDeviceTrusted(supabase, existingProfile.id, deviceToken)
+      : false
+
+    if (existingProfile && trustedDevice) {
       const email = `${normalizedPhone}@whatsapp.sayurku.local`
       const password = `wa_${normalizedPhone}_${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-10)}`
 
@@ -139,7 +148,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // User not registered - proceed with OTP flow
+    // New user, or existing user logging in from an unrecognized device -
+    // require OTP verification.
     // Check rate limit
     const rateLimitTime = new Date()
     rateLimitTime.setMinutes(rateLimitTime.getMinutes() - RATE_LIMIT_MINUTES)
