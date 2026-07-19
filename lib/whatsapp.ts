@@ -59,8 +59,8 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
     }
 
     const data = JSON.parse(rawBody)
-    // WAHA returns the message object if successful
-    return !!data.id
+    // WAHA returns the sent message object; the id lives at data.key.id
+    return !!(data.key?.id ?? data.id)
   } catch (error) {
     console.error('WhatsApp send error:', error)
     return false
