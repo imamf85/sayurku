@@ -35,6 +35,8 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
   try {
     const chatId = formatChatId(params.to)
 
+    console.log('WAHA sendText request:', { chatId, session: WAHA_SESSION })
+
     const response = await fetch(`${WAHA_API_URL}/api/sendText`, {
       method: 'POST',
       headers: {
@@ -48,13 +50,15 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
       }),
     })
 
+    const rawBody = await response.text()
+    console.log('WAHA sendText response:', response.status, rawBody)
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      console.error('WAHA API error:', response.status, errorData)
+      console.error('WAHA API error:', response.status, rawBody)
       return false
     }
 
-    const data = await response.json()
+    const data = JSON.parse(rawBody)
     // WAHA returns the message object if successful
     return !!data.id
   } catch (error) {
