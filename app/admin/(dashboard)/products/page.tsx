@@ -25,6 +25,7 @@ import { Unit } from '@/types'
 
 interface Product {
   id: string
+  code: string
   name: string
   image_url: string | null
   unit: Unit
@@ -62,8 +63,12 @@ export default function ProductsPage() {
   }
 
   const filteredProducts = products.filter((product) => {
-    if (search && !product.name.toLowerCase().includes(search.toLowerCase())) {
-      return false
+    if (search) {
+      const q = search.toLowerCase()
+      const matches =
+        product.name.toLowerCase().includes(q) ||
+        product.code.toLowerCase().includes(q)
+      if (!matches) return false
     }
     return true
   })
@@ -224,6 +229,7 @@ export default function ProductsPage() {
                           aria-label="Pilih semua"
                         />
                       </th>
+                      <th className="p-4 font-medium">Kode</th>
                       <th className="p-4 font-medium">Produk</th>
                       <th className="p-4 font-medium">Kategori</th>
                       <th className="p-4 font-medium">Harga</th>
@@ -246,6 +252,11 @@ export default function ProductsPage() {
                               onCheckedChange={() => toggleSelect(product.id)}
                               aria-label={`Pilih ${product.name}`}
                             />
+                          </td>
+                          <td className="p-4">
+                            <span className="font-mono text-xs bg-gray-100 rounded px-2 py-1">
+                              {product.code}
+                            </span>
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-3">

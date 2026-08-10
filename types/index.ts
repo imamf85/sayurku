@@ -70,6 +70,7 @@ export interface Category {
 
 export interface Product {
   id: string
+  code: string
   category_id: string
   name: string
   slug: string

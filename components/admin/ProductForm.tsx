@@ -126,6 +126,16 @@ export function ProductForm({ product, categories }: ProductFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
       <div className="grid grid-cols-2 gap-4">
+        {isEdit && (
+          <div className="col-span-2">
+            <Label>Kode Produk</Label>
+            <p className="text-sm text-gray-500 mb-1">
+              Gunakan kode ini di bot WhatsApp, contoh: <span className="font-mono">/harga {product!.code} | 15000</span>
+            </p>
+            <Input value={product!.code} disabled className="font-mono" />
+          </div>
+        )}
+
         <div className="col-span-2">
           <Label htmlFor="name">Nama Produk</Label>
           <Input
