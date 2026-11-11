@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useCachedState } from '@/hooks/useCachedState'
 import { Loader2, Package, CheckCircle, XCircle, Clock, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,8 +46,8 @@ function getInquiryStatusInfo(status: string) {
 export default function InquiriesPage() {
   const { toast } = useToast()
 
-  const [inquiries, setInquiries] = useState<(ProductInquiry & { profile?: { full_name: string; phone: string } })[]>([])
-  const [loading, setLoading] = useState(true)
+  const [inquiries, setInquiries, hasCache] = useCachedState<(ProductInquiry & { profile?: { full_name: string; phone: string } })[]>('admin:inquiries', [])
+  const [loading, setLoading] = useState(!hasCache)
   const [filter, setFilter] = useState<string>('all')
   const [selectedInquiry, setSelectedInquiry] = useState<ProductInquiry | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)

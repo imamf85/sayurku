@@ -129,7 +129,7 @@ export async function middleware(request: NextRequest) {
     const adminClient = getAdminClient()
     const { data: admin } = await adminClient
       .from('admins')
-      .select('id, is_active')
+      .select('id, is_active, name, role')
       .ilike('email', user.email)
       .single()
 
@@ -138,6 +138,15 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set('role', 'admin')
       return NextResponse.redirect(url)
     }
+
+    // Teruskan info admin ke layout lewat request header agar layout tidak query ulang.
+    // Selalu di-set (menimpa header dari client) sehingga tidak bisa dipalsukan.
+    const forwardedHeaders = new Headers(request.headers)
+    forwardedHeaders.set('x-admin-name', encodeURIComponent(admin.name || ''))
+    forwardedHeaders.set('x-admin-role', admin.role || '')
+    const adminResponse = NextResponse.next({ request: { headers: forwardedHeaders } })
+    supabaseResponse.cookies.getAll().forEach((c) => adminResponse.cookies.set(c))
+    supabaseResponse = adminResponse
   }
 
   // Redirect logged-in users from login page

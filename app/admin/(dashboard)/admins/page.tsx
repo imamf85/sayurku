@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useCachedState } from '@/hooks/useCachedState'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,8 +29,8 @@ import { useToast } from '@/hooks/use-toast'
 export default function AdminsPage() {
   const { toast } = useToast()
 
-  const [admins, setAdmins] = useState<Admin[]>([])
-  const [loading, setLoading] = useState(true)
+  const [admins, setAdmins, hasCache] = useCachedState<Admin[]>('admin:admins', [])
+  const [loading, setLoading] = useState(!hasCache)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null)

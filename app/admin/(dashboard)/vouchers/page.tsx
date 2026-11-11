@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useCachedState } from '@/hooks/useCachedState'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,8 +30,8 @@ import { formatPrice, formatDate, utcToLocalDatetimeInput, localDatetimeInputToU
 export default function VouchersPage() {
   const { toast } = useToast()
 
-  const [vouchers, setVouchers] = useState<Voucher[]>([])
-  const [loading, setLoading] = useState(true)
+  const [vouchers, setVouchers, hasCache] = useCachedState<Voucher[]>('admin:vouchers', [])
+  const [loading, setLoading] = useState(!hasCache)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null)

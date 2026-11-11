@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Package,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 
 interface SidebarProps {
   adminName: string
@@ -38,21 +38,11 @@ const menuItems = [
 
 export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
 
   const allMenuItems = isSuperAdmin
     ? [...menuItems, { href: '/admin/admins', icon: Users, label: 'Admin' }]
     : menuItems
-
-  const handleNavigation = (href: string) => {
-    setMobileOpen(false)
-    startTransition(() => {
-      router.push(href)
-      router.refresh()
-    })
-  }
 
   return (
     <>
@@ -84,12 +74,13 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
         )}
       >
         <div className="h-14 flex items-center justify-center border-b">
-          <button
-            onClick={() => handleNavigation('/admin')}
+          <Link
+            href="/admin"
+            onClick={() => setMobileOpen(false)}
             className="font-bold text-green-600 text-lg"
           >
             Sayurku Admin
-          </button>
+          </Link>
         </div>
 
         <nav className="p-4 space-y-1">
@@ -98,21 +89,20 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
               pathname === item.href ||
               (item.href !== '/admin' && pathname.startsWith(item.href))
             return (
-              <button
+              <Link
                 key={item.href}
-                onClick={() => handleNavigation(item.href)}
-                disabled={isPending}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left',
                   isActive
                     ? 'bg-green-50 text-green-600 font-medium'
-                    : 'text-gray-600 hover:bg-gray-100',
-                  isPending && 'opacity-50 cursor-wait'
+                    : 'text-gray-600 hover:bg-gray-100'
                 )}
               >
                 <item.icon className="h-5 w-5" />
                 {item.label}
-              </button>
+              </Link>
             )
           })}
         </nav>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useCachedState } from '@/hooks/useCachedState'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,8 +26,8 @@ export default function CategoriesPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
+  const [categories, setCategories, hasCache] = useCachedState<Category[]>('admin:categories', [])
+  const [loading, setLoading] = useState(!hasCache)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)

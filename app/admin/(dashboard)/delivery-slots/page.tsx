@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useCachedState } from '@/hooks/useCachedState'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,8 +29,8 @@ import { useToast } from '@/hooks/use-toast'
 export default function DeliverySlotsPage() {
   const { toast } = useToast()
 
-  const [slots, setSlots] = useState<DeliverySlot[]>([])
-  const [loading, setLoading] = useState(true)
+  const [slots, setSlots, hasCache] = useCachedState<DeliverySlot[]>('admin:delivery-slots', [])
+  const [loading, setLoading] = useState(!hasCache)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingSlot, setEditingSlot] = useState<DeliverySlot | null>(null)
