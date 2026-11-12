@@ -6,6 +6,7 @@ export type OrderStatus =
   | 'pending_payment'
   | 'paid'
   | 'processing'
+  | 'ready_for_pickup'
   | 'shipping'
   | 'delivered'
   | 'cancelled'
@@ -13,6 +14,10 @@ export type OrderStatus =
 export type AdminRole = 'super_admin' | 'admin'
 
 export type DeliverySlotType = 'instant' | 'scheduled'
+
+export type FulfillmentMethod = 'internal' | 'grab' | 'pickup'
+
+export type FulfillmentTiming = 'asap' | 'scheduled'
 
 export type InquiryStatus = 'pending' | 'accepted' | 'rejected' | 'ordered' | 'cancelled'
 
@@ -149,6 +154,7 @@ export interface AddressSnapshot {
   village: string
   postal_code: string
   notes: string | null
+  is_pickup?: boolean
 }
 
 export interface ProductSnapshot {
@@ -179,6 +185,16 @@ export interface Order {
   payment_method: PaymentMethod | null
   payment_id: string | null
   paid_at: string | null
+  fulfillment_method: FulfillmentMethod
+  fulfillment_timing: FulfillmentTiming
+  shipping_fee: number
+  distance_km: number | null
+  total_weight_grams: number | null
+  delivery_slot_name: string | null
+  pickup_code: string | null
+  ready_at: string | null
+  pickup_reminded_at: string | null
+  refund_note: string | null
   payment_proof_url: string | null
   payment_token: string | null
   tracking_token: string | null
@@ -233,6 +249,8 @@ export interface DeliverySlot {
   time_end: string | null
   is_active: boolean
   sort_order: number
+  applies_to?: 'delivery' | 'pickup' | 'both'
+  internal_capacity?: number | null
 }
 
 export interface ProductInquiry {

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CheckoutForm } from './checkout-form'
+import { getSettingsCached } from '@/lib/settings'
 
 export default async function CheckoutPage() {
   const supabase = createClient()
@@ -11,7 +12,7 @@ export default async function CheckoutPage() {
     redirect('/login?redirect=/checkout')
   }
 
-  const [cartRes, addressesRes, profileRes, slotsRes] = await Promise.all([
+  const [cartRes, addressesRes, profileRes, slotsRes, settings] = await Promise.all([
     supabase
       .from('cart_items')
       .select('*, product:products(*)')
@@ -32,6 +33,8 @@ export default async function CheckoutPage() {
       .select('*')
       .eq('is_active', true)
       .order('sort_order'),
+    // Hanya untuk tampilan (cache); keputusan final dihitung ulang di server saat order dibuat
+    getSettingsCached(),
   ])
 
   const cartItems = cartRes.data || []
@@ -55,6 +58,7 @@ export default async function CheckoutPage() {
       addresses={addresses}
       profile={profile}
       deliverySlots={deliverySlots}
+      settings={settings}
       hasPreorder={hasPreorder}
       maxPreorderDays={maxPreorderDays}
     />

@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Order } from '@/types'
-import { formatPrice, formatDate, getStatusLabel, getStatusColor } from '@/lib/utils'
+import { formatPrice, formatDate, getStatusColor } from '@/lib/utils'
+import { FULFILLMENT_LABELS, statusLabelFor } from '@/lib/fulfillment/labels'
 import { Eye } from 'lucide-react'
 
 interface OrderTableProps {
@@ -19,6 +20,7 @@ export function OrderTable({ orders }: OrderTableProps) {
           <tr className="border-b text-left text-sm text-gray-500">
             <th className="pb-3 font-medium">No. Pesanan</th>
             <th className="pb-3 font-medium">Tanggal</th>
+            <th className="pb-3 font-medium">Metode</th>
             <th className="pb-3 font-medium">Status</th>
             <th className="pb-3 font-medium text-right">Total</th>
             <th className="pb-3 font-medium text-center">Aksi</th>
@@ -33,9 +35,12 @@ export function OrderTable({ orders }: OrderTableProps) {
               <td className="py-3 text-sm text-gray-600">
                 {formatDate(order.created_at)}
               </td>
+              <td className="py-3 text-sm text-gray-600">
+                {FULFILLMENT_LABELS[order.fulfillment_method] ?? '-'}
+              </td>
               <td className="py-3">
                 <Badge className={getStatusColor(order.status)}>
-                  {getStatusLabel(order.status)}
+                  {statusLabelFor(order.status, order.fulfillment_method)}
                 </Badge>
               </td>
               <td className="py-3 text-right font-medium">

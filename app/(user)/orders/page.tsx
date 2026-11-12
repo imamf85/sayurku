@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClipboardList, MapPin } from 'lucide-react'
-import { formatPrice, formatDate, getStatusLabel, getStatusColor } from '@/lib/utils'
+import { formatPrice, formatDate, getStatusColor } from '@/lib/utils'
+import { statusLabelFor } from '@/lib/fulfillment/labels'
 
 export default async function OrdersPage() {
   const supabase = createClient()
@@ -66,7 +67,7 @@ export default async function OrdersPage() {
                   <span className="text-xs text-gray-500">{formatDate(order.created_at)}</span>
                 </div>
                 <Badge className={getStatusColor(order.status)}>
-                  {getStatusLabel(order.status)}
+                  {statusLabelFor(order.status, order.fulfillment_method)}
                 </Badge>
               </div>
 

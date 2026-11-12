@@ -3,7 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { transitionOrder } from '@/lib/orders/transition'
-import { formatPrice, getStatusLabel } from '@/lib/utils'
+import { getSettingsFresh } from '@/lib/settings'
+import { pickupReadyMessage } from '@/lib/notifications/pickup'
+import { statusLabelFor } from '@/lib/fulfillment/labels'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
 
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
     // Get current order info
     const { data: order } = await adminClient
       .from('orders')
-      .select('status, order_number, total, tracking_token, user_id')
+      .select('status, order_number, total, tracking_token, user_id, fulfillment_method, pickup_code, payment_method')
       .eq('id', orderId)
       .single()
 
@@ -69,12 +71,25 @@ export async function POST(request: NextRequest) {
 
     // Ubah status + catat riwayat lewat satu pintu (I9)
     try {
-      await transitionOrder(adminClient, orderId, {
+      const result = await transitionOrder(adminClient, orderId, {
         to: status,
         note: note || null,
         actorId: admin.id,
         fields,
       })
+
+      if (result.blocked) {
+        return NextResponse.json(
+          {
+            error:
+              result.blocked === 'PICKUP_REQUIRES_CODE'
+                ? 'Pesanan ambil di toko hanya bisa diselesaikan lewat "Serahkan Pesanan" dengan kode ambil'
+                : 'Status ini tidak berlaku untuk metode pengiriman pesanan',
+            code: result.blocked,
+          },
+          { status: 400 }
+        )
+      }
     } catch (updateError: any) {
       console.error('Update order error:', updateError)
       return NextResponse.json(
@@ -94,19 +109,32 @@ export async function POST(request: NextRequest) {
       if (profile?.phone) {
         const trackingUrl = `${APP_URL}/track/${order.tracking_token}`
 
-        let message = `*Update Pesanan - Sayurku*\n\n`
-        message += `No. Pesanan: ${order.order_number}\n`
-        message += `Status: *${getStatusLabel(status)}*\n`
+        let message: string
 
-        if (note) {
-          message += `\n${note}\n`
+        if (status === 'ready_for_pickup') {
+          message = pickupReadyMessage({
+            orderNumber: order.order_number,
+            pickupCode: order.pickup_code,
+            store: await getSettingsFresh(),
+            trackingUrl,
+            payAtStore: order.payment_method === 'cod',
+            total: order.total,
+          })
+        } else {
+          message = `*Update Pesanan - Sayurku*\n\n`
+          message += `No. Pesanan: ${order.order_number}\n`
+          message += `Status: *${statusLabelFor(status, order.fulfillment_method)}*\n`
+
+          if (note) {
+            message += `\n${note}\n`
+          }
+
+          if (status === 'delivered' && receivedBy) {
+            message += `\nDiterima oleh: ${receivedBy}\n`
+          }
+
+          message += `\nLacak pesanan:\n${trackingUrl}`
         }
-
-        if (status === 'delivered' && receivedBy) {
-          message += `\nDiterima oleh: ${receivedBy}\n`
-        }
-
-        message += `\nLacak pesanan:\n${trackingUrl}`
 
         await sendWhatsAppMessage({
           to: profile.phone,

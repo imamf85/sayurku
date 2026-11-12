@@ -12,10 +12,14 @@ import {
   Package,
   Truck,
   Home,
+  Store,
   Clock,
   ArrowLeft,
 } from 'lucide-react'
-import { formatDate, formatDateTime, formatPrice, getStatusLabel } from '@/lib/utils'
+import { formatDate, formatDateTime, formatPrice } from '@/lib/utils'
+import { PickupInfoCard } from '@/components/user/PickupInfoCard'
+import { getSettingsCached } from '@/lib/settings'
+import { progressSteps, statusLabelFor } from '@/lib/fulfillment/labels'
 
 interface TrackingPageProps {
   params: { token: string }
@@ -25,12 +29,11 @@ const statusIcons: Record<string, React.ReactNode> = {
   pending_payment: <Clock className="h-5 w-5" />,
   paid: <CheckCircle2 className="h-5 w-5" />,
   processing: <Package className="h-5 w-5" />,
+  ready_for_pickup: <Store className="h-5 w-5" />,
   shipping: <Truck className="h-5 w-5" />,
   delivered: <Home className="h-5 w-5" />,
   cancelled: <Circle className="h-5 w-5" />,
 }
-
-const statusOrder = ['processing', 'shipping', 'delivered']
 
 export default async function TrackingPage({ params }: TrackingPageProps) {
   const supabase = createAdminClient()
@@ -42,6 +45,11 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
       order_number,
       status,
       total,
+      shipping_fee,
+      fulfillment_method,
+      pickup_code,
+      payment_method,
+      delivery_slot_name,
       delivery_date,
       delivery_slot,
       received_by,
@@ -66,6 +74,10 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
     .select('*, admin:admins(name)')
     .eq('order_id', order.id)
     .order('created_at', { ascending: false })
+
+  const pickup = order.fulfillment_method === 'pickup'
+  const statusOrder = progressSteps(order.fulfillment_method)
+  const store = pickup ? await getSettingsCached() : null
 
   // Get current status index for progress indicator
   const currentStatusIndex = statusOrder.indexOf(order.status)
@@ -97,13 +109,13 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
                       : 'bg-yellow-100 text-yellow-800'
                 }
               >
-                {getStatusLabel(order.status)}
+                {statusLabelFor(order.status, order.fulfillment_method)}
               </Badge>
               <p className="text-sm text-gray-500 mt-2">No. Pesanan</p>
               <p className="font-semibold">{order.order_number}</p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-500">Estimasi Tiba</p>
+              <p className="text-sm text-gray-500">{pickup ? 'Waktu Ambil' : 'Estimasi Tiba'}</p>
               <p className="text-xl font-bold text-green-600">
                 {formatDate(order.delivery_date)}
               </p>
@@ -154,13 +166,23 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
                         isCompleted ? 'text-green-600 font-medium' : 'text-gray-400'
                       }`}
                     >
-                      {getStatusLabel(status)}
+                      {statusLabelFor(status, order.fulfillment_method)}
                     </p>
                   </div>
                 )
               })}
             </div>
           </div>
+        )}
+
+        {pickup && store && (
+          <PickupInfoCard
+            store={store}
+            pickupCode={order.pickup_code}
+            status={order.status}
+            payAtStore={order.payment_method === 'cod'}
+            total={order.total}
+          />
         )}
 
         {/* Delivery Info */}
@@ -209,7 +231,7 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
                   {/* Content */}
                   <div className="flex-1 pb-4">
                     <p className={`font-medium ${isLatest ? 'text-green-600' : 'text-gray-700'}`}>
-                      {getStatusLabel(history.status)}
+                      {statusLabelFor(history.status, order.fulfillment_method)}
                     </p>
                     {history.note && (
                       <p className="text-sm text-gray-600 mt-0.5">{history.note}</p>
@@ -255,6 +277,12 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
               </div>
             ))}
           </div>
+          {order.shipping_fee > 0 && (
+            <div className="border-t mt-3 pt-3 flex justify-between text-sm">
+              <span className="text-gray-500">Ongkos kirim</span>
+              <span>{formatPrice(order.shipping_fee)}</span>
+            </div>
+          )}
           <div className="border-t mt-3 pt-3 flex justify-between">
             <span className="font-medium">Total</span>
             <span className="font-bold text-green-600">{formatPrice(order.total)}</span>

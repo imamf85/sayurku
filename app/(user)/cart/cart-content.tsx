@@ -34,8 +34,19 @@ export function CartContent({ initialItems, initialTotal }: CartContentProps) {
     })
   }
 
+  const hasPickupOnly = items.some((i) => i.product?.flags?.includes('pickup_only'))
+  const hasNoGrab = items.some((i) => i.product?.flags?.includes('no_grab'))
+
   return (
     <>
+      {(hasPickupOnly || hasNoGrab) && (
+        <div className="mb-3 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-sm text-blue-800">
+          {hasPickupOnly
+            ? 'Keranjang berisi produk "Ambil di Toko", jadi pesanan ini hanya bisa diambil di toko.'
+            : 'Ada produk yang tidak bisa dikirim lewat kurir online.'}
+        </div>
+      )}
+
       <div className="space-y-3">
         {items.map((item) => (
           <CartActions

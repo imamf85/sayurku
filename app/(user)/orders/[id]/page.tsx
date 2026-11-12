@@ -7,20 +7,20 @@ import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { MapPin, CheckCircle2, Package, Truck, Home } from 'lucide-react'
+import { MapPin, CheckCircle2, Package, Truck, Home, Store } from 'lucide-react'
+import { PickupInfoCard } from '@/components/user/PickupInfoCard'
+import { getSettingsCached } from '@/lib/settings'
+import { FULFILLMENT_LABELS, progressSteps, statusLabelFor } from '@/lib/fulfillment/labels'
 import {
   formatPrice,
   formatDate,
   formatDateTime,
-  getStatusLabel,
   getStatusColor,
 } from '@/lib/utils'
 
 interface OrderDetailPageProps {
   params: { id: string }
 }
-
-const statusOrder = ['processing', 'shipping', 'delivered']
 
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
   const supabase = createClient()
@@ -54,7 +54,10 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     .eq('order_id', params.id)
     .order('created_at', { ascending: false })
 
-  const canTrack = ['processing', 'shipping'].includes(order.status)
+  const pickup = order.fulfillment_method === 'pickup'
+  const statusOrder = progressSteps(order.fulfillment_method)
+  const store = pickup ? await getSettingsCached() : null
+  const canTrack = ['processing', 'ready_for_pickup', 'shipping'].includes(order.status)
   const currentStatusIndex = statusOrder.indexOf(order.status)
   const isCancelled = order.status === 'cancelled'
 
@@ -63,7 +66,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">Detail Pesanan</h1>
         <Badge className={getStatusColor(order.status)}>
-          {getStatusLabel(order.status)}
+          {statusLabelFor(order.status, order.fulfillment_method)}
         </Badge>
       </div>
 
@@ -76,6 +79,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               const isCurrent = currentStatusIndex === index
               const Icon = status === 'processing' ? Package
                 : status === 'shipping' ? Truck
+                : status === 'ready_for_pickup' ? Store
                 : Home
 
               return (
@@ -110,7 +114,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                       isCompleted ? 'text-green-600 font-medium' : 'text-gray-400'
                     }`}
                   >
-                    {getStatusLabel(status)}
+                    {statusLabelFor(status, order.fulfillment_method)}
                   </p>
                 </div>
               )
@@ -151,35 +155,51 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         </div>
       </div>
 
-      <div className="bg-white rounded-lg p-4 mb-4">
-        <h2 className="font-medium mb-3">Alamat Pengiriman</h2>
-        <div className="text-sm">
-          <p className="font-medium">{order.address_snapshot.label}</p>
-          <p className="text-gray-600">{order.address_snapshot.address}</p>
-          <p className="text-gray-600">
-            {order.address_snapshot.village && `${order.address_snapshot.village}, `}
-            {order.address_snapshot.district}, {order.address_snapshot.city}
-            {order.address_snapshot.province && `, ${order.address_snapshot.province}`}{' '}
-            {order.address_snapshot.postal_code}
-          </p>
-          {order.address_snapshot.notes && (
-            <p className="text-gray-500 mt-1">
-              Patokan: {order.address_snapshot.notes}
+      {pickup && store ? (
+        <PickupInfoCard
+          store={store}
+          pickupCode={order.pickup_code}
+          status={order.status}
+          payAtStore={order.payment_method === 'cod'}
+          total={order.total}
+        />
+      ) : (
+        <div className="bg-white rounded-lg p-4 mb-4">
+          <h2 className="font-medium mb-3">Alamat Pengiriman</h2>
+          <div className="text-sm">
+            <p className="font-medium">{order.address_snapshot.label}</p>
+            <p className="text-gray-600">{order.address_snapshot.address}</p>
+            <p className="text-gray-600">
+              {order.address_snapshot.village && `${order.address_snapshot.village}, `}
+              {order.address_snapshot.district}, {order.address_snapshot.city}
+              {order.address_snapshot.province && `, ${order.address_snapshot.province}`}{' '}
+              {order.address_snapshot.postal_code}
             </p>
-          )}
+            {order.address_snapshot.notes && (
+              <p className="text-gray-500 mt-1">
+                Patokan: {order.address_snapshot.notes}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-white rounded-lg p-4 mb-4">
-        <h2 className="font-medium mb-3">Pengiriman</h2>
+        <h2 className="font-medium mb-3">{pickup ? 'Waktu Pengambilan' : 'Pengiriman'}</h2>
         <div className="text-sm space-y-1">
+          {!pickup && (
+            <p>
+              <span className="text-gray-500">Metode: </span>
+              {FULFILLMENT_LABELS[order.fulfillment_method as keyof typeof FULFILLMENT_LABELS] ?? 'Kurir Sayurku'}
+            </p>
+          )}
           <p>
             <span className="text-gray-500">Tanggal: </span>
             {formatDate(order.delivery_date)}
           </p>
           <p>
             <span className="text-gray-500">Waktu: </span>
-            {slot?.name || order.delivery_slot}
+            {order.delivery_slot_name || slot?.name || order.delivery_slot}
           </p>
           {order.received_by && (
             <p>
@@ -266,7 +286,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 </div>
                 <div className="flex-1 pb-2">
                   <p className={`text-sm font-medium ${index === 0 ? 'text-green-600' : 'text-gray-700'}`}>
-                    {getStatusLabel(history.status)}
+                    {statusLabelFor(history.status, order.fulfillment_method)}
                   </p>
                   {history.note && (
                     <p className="text-xs text-gray-500">{history.note}</p>
@@ -292,6 +312,12 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             <div className="flex justify-between text-green-600">
               <span>Diskon</span>
               <span>-{formatPrice(order.discount)}</span>
+            </div>
+          )}
+          {order.shipping_fee > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Ongkos kirim</span>
+              <span>{formatPrice(order.shipping_fee)}</span>
             </div>
           )}
           <Separator className="my-2" />

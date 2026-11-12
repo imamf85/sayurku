@@ -41,6 +41,8 @@ export default function DeliverySlotsPage() {
     time_end: '',
     sort_order: 0,
     is_active: true,
+    applies_to: 'both' as 'delivery' | 'pickup' | 'both',
+    internal_capacity: '' as string, // kosong = tak terbatas
   })
 
   useEffect(() => {
@@ -71,6 +73,8 @@ export default function DeliverySlotsPage() {
       time_end: form.slot_type === 'scheduled' ? form.time_end : null,
       sort_order: form.sort_order,
       is_active: form.is_active,
+      applies_to: form.applies_to,
+      internal_capacity: form.internal_capacity.trim() === '' ? null : Math.max(0, parseInt(form.internal_capacity) || 0),
     }
 
     try {
@@ -112,6 +116,8 @@ export default function DeliverySlotsPage() {
       time_end: slot.time_end || '',
       sort_order: slot.sort_order,
       is_active: slot.is_active,
+      applies_to: slot.applies_to ?? 'both',
+      internal_capacity: slot.internal_capacity != null ? String(slot.internal_capacity) : '',
     })
     setDialogOpen(true)
   }
@@ -144,6 +150,8 @@ export default function DeliverySlotsPage() {
       time_end: '',
       sort_order: slots.length,
       is_active: true,
+      applies_to: 'both',
+      internal_capacity: '',
     })
   }
 
@@ -196,7 +204,7 @@ export default function DeliverySlotsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="instant">Instant (1 Jam Setelah Bayar)</SelectItem>
+                    <SelectItem value="instant">Instant (Secepatnya)</SelectItem>
                     <SelectItem value="scheduled">Terjadwal</SelectItem>
                   </SelectContent>
                 </Select>
@@ -225,6 +233,36 @@ export default function DeliverySlotsPage() {
                   </div>
                 </div>
               )}
+              <div>
+                <Label htmlFor="applies_to">Berlaku untuk</Label>
+                <Select
+                  value={form.applies_to}
+                  onValueChange={(value) => setForm({ ...form, applies_to: value as 'delivery' | 'pickup' | 'both' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="both">Antar dan Ambil di Toko</SelectItem>
+                    <SelectItem value="delivery">Antar saja</SelectItem>
+                    <SelectItem value="pickup">Ambil di Toko saja</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="internal_capacity">Kapasitas kurir Sayurku per hari</Label>
+                <Input
+                  id="internal_capacity"
+                  type="number"
+                  min="0"
+                  value={form.internal_capacity}
+                  onChange={(e) => setForm({ ...form, internal_capacity: e.target.value })}
+                  placeholder="Kosongkan = tak terbatas"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Jumlah maksimal pesanan antar kurir Sayurku di slot ini untuk satu tanggal. Pesanan ambil di toko tidak dihitung.
+                </p>
+              </div>
               <div>
                 <Label htmlFor="sort_order">Urutan</Label>
                 <Input
@@ -265,6 +303,8 @@ export default function DeliverySlotsPage() {
                   <th className="p-4 font-medium">Nama</th>
                   <th className="p-4 font-medium">Tipe</th>
                   <th className="p-4 font-medium">Waktu</th>
+                  <th className="p-4 font-medium">Berlaku</th>
+                  <th className="p-4 font-medium">Kapasitas</th>
                   <th className="p-4 font-medium">Status</th>
                   <th className="p-4 font-medium text-center">Aksi</th>
                 </tr>
@@ -283,6 +323,12 @@ export default function DeliverySlotsPage() {
                       {slot.time_start && slot.time_end
                         ? `${slot.time_start} - ${slot.time_end}`
                         : '-'}
+                    </td>
+                    <td className="p-4 text-sm">
+                      {slot.applies_to === 'delivery' ? 'Antar' : slot.applies_to === 'pickup' ? 'Ambil' : 'Antar & Ambil'}
+                    </td>
+                    <td className="p-4 text-sm">
+                      {slot.internal_capacity != null ? slot.internal_capacity : '∞'}
                     </td>
                     <td className="p-4">
                       {slot.is_active ? (

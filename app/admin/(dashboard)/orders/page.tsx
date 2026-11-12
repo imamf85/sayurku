@@ -17,6 +17,7 @@ export default async function OrdersPage() {
   const pendingOrders = allOrders.filter((o) => o.status === 'pending_payment')
   const paidOrders = allOrders.filter((o) => o.status === 'paid')
   const processingOrders = allOrders.filter((o) => o.status === 'processing')
+  const readyOrders = allOrders.filter((o) => o.status === 'ready_for_pickup')
   const shippingOrders = allOrders.filter((o) => o.status === 'shipping')
   const deliveredOrders = allOrders.filter((o) => o.status === 'delivered')
 
@@ -33,6 +34,9 @@ export default async function OrdersPage() {
           <TabsTrigger value="paid">Dibayar ({paidOrders.length})</TabsTrigger>
           <TabsTrigger value="processing">
             Diproses ({processingOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="ready">
+            Siap Diambil ({readyOrders.length})
           </TabsTrigger>
           <TabsTrigger value="shipping">
             Dikirim ({shippingOrders.length})
@@ -92,6 +96,20 @@ export default async function OrdersPage() {
               ) : (
                 <p className="text-center py-8 text-gray-500">
                   Tidak ada pesanan diproses
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ready">
+          <Card>
+            <CardContent className="pt-6">
+              {readyOrders.length > 0 ? (
+                <OrderTable orders={readyOrders} />
+              ) : (
+                <p className="text-center py-8 text-gray-500">
+                  Tidak ada pesanan siap diambil
                 </p>
               )}
             </CardContent>

@@ -15,6 +15,8 @@ interface DeliverySlotPickerProps {
   onSlotChange: (slot: string) => void
   isPreorder?: boolean
   minDate?: Date
+  /** slotId → alasan tidak tersedia (null/undefined = tersedia). Slot dengan alasan tampil nonaktif. */
+  unavailableReasons?: Record<string, string | null | undefined>
 }
 
 export function DeliverySlotPicker({
@@ -25,6 +27,7 @@ export function DeliverySlotPicker({
   onSlotChange,
   isPreorder = false,
   minDate,
+  unavailableReasons,
 }: DeliverySlotPickerProps) {
   const [showAllDates, setShowAllDates] = useState(false)
 
@@ -62,10 +65,13 @@ export function DeliverySlotPicker({
 
   // Clear selected slot if it's no longer available
   useEffect(() => {
-    if (selectedSlot && !availableSlots.find(s => s.id === selectedSlot)) {
+    if (
+      selectedSlot &&
+      (!availableSlots.find(s => s.id === selectedSlot) || unavailableReasons?.[selectedSlot])
+    ) {
       onSlotChange('')
     }
-  }, [selectedDate, availableSlots, selectedSlot])
+  }, [selectedDate, availableSlots, selectedSlot, unavailableReasons])
 
   return (
     <div className="space-y-4">
@@ -117,18 +123,24 @@ export function DeliverySlotPicker({
           ) : (
             availableSlots.map((slot) => {
               const isSelected = selectedSlot === slot.id
+              const reason = unavailableReasons?.[slot.id]
               return (
                 <button
                   key={slot.id}
+                  type="button"
+                  disabled={!!reason}
                   onClick={() => onSlotChange(slot.id)}
                   className={cn(
                     'p-3 rounded-lg border text-sm transition-colors',
-                    isSelected
-                      ? 'bg-green-600 text-white border-green-600'
-                      : 'bg-white hover:border-green-300'
+                    reason
+                      ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : isSelected
+                        ? 'bg-green-600 text-white border-green-600'
+                        : 'bg-white hover:border-green-300'
                   )}
                 >
                   {slot.name}
+                  {reason && <span className="block text-[11px] leading-tight mt-1 font-normal">{reason}</span>}
                 </button>
               )
             })

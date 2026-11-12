@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { transitionOrder } from '@/lib/orders/transition'
+import { getSettingsFresh } from '@/lib/settings'
+import { pickupReadyMessage } from '@/lib/notifications/pickup'
 import { formatPrice } from '@/lib/utils'
 import { OrderStatus } from '@/types'
 
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate status
-    const validStatuses: OrderStatus[] = ['processing', 'shipping', 'delivered', 'cancelled']
+    const validStatuses: OrderStatus[] = ['processing', 'ready_for_pickup', 'shipping', 'delivered', 'cancelled']
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
         { error: 'Invalid status' },
@@ -88,10 +90,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Ubah status + catat riwayat lewat satu pintu (I9)
-    await transitionOrder(adminSupabase, order.id, {
+    const result = await transitionOrder(adminSupabase, order.id, {
       to: status,
       note: 'Status diupdate via management link',
     })
+
+    if (result.blocked) {
+      return NextResponse.json(
+        {
+          error:
+            result.blocked === 'PICKUP_REQUIRES_CODE'
+              ? 'Pesanan ambil di toko harus diselesaikan dengan kode ambil'
+              : 'Status ini tidak berlaku untuk metode pengiriman pesanan',
+          code: result.blocked,
+        },
+        { status: 400 }
+      )
+    }
 
     // Get customer info to send notification
     const { data: profile } = await adminSupabase
@@ -106,11 +121,17 @@ export async function POST(request: NextRequest) {
         ? `${APP_URL}/track/${order.tracking_token}`
         : `${APP_URL}/orders`
 
-      const message = formatStatusUpdateMessage(
-        order.order_number,
-        status,
-        trackingUrl
-      )
+      const message =
+        status === 'ready_for_pickup'
+          ? pickupReadyMessage({
+              orderNumber: order.order_number,
+              pickupCode: order.pickup_code,
+              store: await getSettingsFresh(),
+              trackingUrl,
+              payAtStore: order.payment_method === 'cod',
+              total: order.total,
+            })
+          : formatStatusUpdateMessage(order.order_number, status, trackingUrl)
 
       await sendWhatsAppMessage({
         to: profile.phone,

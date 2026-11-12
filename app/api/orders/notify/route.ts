@@ -3,9 +3,16 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { formatPrice } from '@/lib/utils'
+import { FULFILLMENT_LABELS } from '@/lib/fulfillment/labels'
 
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '6281217571585'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
+
+interface FulfillmentOpts {
+  pickup: boolean
+  pickupCode: string | null
+  methodLabel: string
+}
 
 function formatOrderMessageForUser(
   orderNumber: string,
@@ -15,8 +22,13 @@ function formatOrderMessageForUser(
   deliveryDate: string,
   deliverySlot: string,
   trackingUrl: string,
-  paymentUrl?: string
+  paymentUrl?: string,
+  opts?: FulfillmentOpts
 ): string {
+  const pickup = !!opts?.pickup
+  const section = pickup ? 'Ambil di Toko' : 'Pengiriman'
+  const codeLine = pickup && opts?.pickupCode ? `\nKode ambil: *${opts.pickupCode}*` : ''
+
   const paymentMethodLabels: Record<string, string> = {
     cod: 'Bayar di Tempat (COD)',
     qris: 'QRIS',
@@ -36,11 +48,11 @@ Terima kasih telah berbelanja di Sayurku!
 *Jumlah Item:* ${itemCount} item
 *Metode Pembayaran:* ${paymentLabel}
 
-*Pengiriman:*
+*${section}:*
 Tanggal: ${deliveryDate}
-Waktu: ${deliverySlot}
+Waktu: ${deliverySlot}${codeLine}
 
-Siapkan uang pas sebesar ${formatPrice(total)} saat pesanan tiba.
+${pickup ? `Bayar di toko sebesar ${formatPrice(total)} saat mengambil pesanan.` : `Siapkan uang pas sebesar ${formatPrice(total)} saat pesanan tiba.`}
 
 Lacak pesanan Anda:
 ${trackingUrl}
@@ -58,9 +70,9 @@ Pesanan Anda telah dibuat, silakan selesaikan pembayaran.
 *Jumlah Item:* ${itemCount} item
 *Metode Pembayaran:* ${paymentLabel}
 
-*Pengiriman:*
+*${section}:*
 Tanggal: ${deliveryDate}
-Waktu: ${deliverySlot}
+Waktu: ${deliverySlot}${codeLine}
 
 Selesaikan pembayaran di:
 ${paymentUrl}
@@ -79,7 +91,8 @@ function formatOrderMessageForAdmin(
   deliveryDate: string,
   deliverySlot: string,
   address: string,
-  managementToken: string | null
+  managementToken: string | null,
+  opts?: FulfillmentOpts
 ): string {
   const manageUrl = managementToken
     ? `${APP_URL}/manage-order/${managementToken}`
@@ -102,10 +115,11 @@ function formatOrderMessageForAdmin(
 *Jumlah Item:* ${itemCount} item
 *Pembayaran:* ${paymentLabel}
 
-*Pengiriman:*
+*${opts?.pickup ? 'Ambil di Toko' : 'Pengiriman'}:*
+Metode: ${opts?.methodLabel ?? 'Kurir Sayurku'}
 Tanggal: ${deliveryDate}
 Waktu: ${deliverySlot}
-Alamat: ${address}
+${opts?.pickup ? 'Pelanggan datang sendiri ke toko' : `Alamat: ${address}`}
 
 Kelola pesanan (tanpa login):
 ${manageUrl}`
@@ -173,6 +187,14 @@ export async function POST(request: NextRequest) {
     const addr = order.address_snapshot
     const fullAddress = `${addr.address}, ${addr.village ? addr.village + ', ' : ''}${addr.district}, ${addr.city}${addr.province ? ', ' + addr.province : ''} ${addr.postal_code}`
 
+    const slotName = order.delivery_slot_name || order.delivery_slot?.name || ''
+    const fulfillmentOpts: FulfillmentOpts = {
+      pickup: order.fulfillment_method === 'pickup',
+      pickupCode: order.pickup_code ?? null,
+      methodLabel:
+        FULFILLMENT_LABELS[order.fulfillment_method as keyof typeof FULFILLMENT_LABELS] ?? 'Kurir Sayurku',
+    }
+
     // Send notification to user
     if (customerPhone) {
       const trackingUrl = order.tracking_token
@@ -187,9 +209,10 @@ export async function POST(request: NextRequest) {
         order.items?.length || 0,
         order.payment_method,
         deliveryDate,
-        order.delivery_slot.name,
+        slotName,
         trackingUrl,
-        paymentUrl
+        paymentUrl,
+        fulfillmentOpts
       )
 
       await sendWhatsAppMessage({
@@ -210,9 +233,10 @@ export async function POST(request: NextRequest) {
         order.items?.length || 0,
         order.payment_method,
         deliveryDate,
-        order.delivery_slot.name,
+        slotName,
         fullAddress,
-        order.management_token
+        order.management_token,
+        fulfillmentOpts
       )
 
       await sendWhatsAppMessage({

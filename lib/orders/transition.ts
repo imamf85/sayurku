@@ -19,11 +19,15 @@ export interface TransitionOptions {
   actorId?: string | null
   /** Kolom orders tambahan yang ikut di-update (paid_at, received_by, dst.) */
   fields?: Record<string, unknown>
+  /** Hanya endpoint serah-terima (verifikasi kode ambil) yang boleh menyelesaikan order pickup */
+  viaHandover?: boolean
 }
 
 export interface TransitionResult {
   /** false bila order sudah tidak di status yang diharapkan (tidak ada yang diubah) */
   applied: boolean
+  /** Diisi bila transisi ditolak oleh aturan (bukan karena balapan) */
+  blocked?: 'INVALID_TRANSITION' | 'PICKUP_REQUIRES_CODE'
   /** true bila status benar-benar berpindah (from !== to) */
   changed: boolean
   from: OrderStatus | null
@@ -35,12 +39,26 @@ export class OrderNotFoundError extends Error {
   }
 }
 
+export type TransitionBlock = 'INVALID_TRANSITION' | 'PICKUP_REQUIRES_CODE' | null
+
 /**
- * Aturan transisi. Fase 0 sengaja permisif (tidak mengubah perilaku admin saat ini);
- * aturan pickup (ready_for_pickup → delivered hanya via kode ambil) ditambahkan di Fase 2.
+ * Aturan transisi (dokumen §6.2). Selain aturan metode di bawah, perpindahan antar status
+ * tetap permisif agar admin dapat mengoreksi kesalahan.
+ *  - `ready_for_pickup` hanya untuk order pickup.
+ *  - `shipping` tidak berlaku untuk order pickup.
+ *  - Order pickup hanya boleh `delivered` lewat endpoint serah-terima (verifikasi kode ambil).
  */
-export function canTransition(_from: OrderStatus, _to: OrderStatus): boolean {
-  return true
+export function checkTransition(
+  method: string | null | undefined,
+  _from: OrderStatus,
+  to: OrderStatus,
+  viaHandover = false
+): TransitionBlock {
+  const pickup = method === 'pickup'
+  if (to === 'ready_for_pickup' && !pickup) return 'INVALID_TRANSITION'
+  if (to === 'shipping' && pickup) return 'INVALID_TRANSITION'
+  if (to === 'delivered' && pickup && !viaHandover) return 'PICKUP_REQUIRES_CODE'
+  return null
 }
 
 export async function transitionOrder(
@@ -50,7 +68,7 @@ export async function transitionOrder(
 ): Promise<TransitionResult> {
   const { data: current, error: readError } = await admin
     .from('orders')
-    .select('status')
+    .select('status, fulfillment_method')
     .eq('id', orderId)
     .single()
 
@@ -60,12 +78,18 @@ export async function transitionOrder(
   const expected = opts.expectFrom === undefined ? null : ([] as OrderStatus[]).concat(opts.expectFrom)
 
   if (expected && !expected.includes(from)) return { applied: false, changed: false, from }
-  if (!canTransition(from, opts.to)) return { applied: false, changed: false, from }
+  const blocked = checkTransition(current.fulfillment_method, from, opts.to, opts.viaHandover)
+  if (blocked) return { applied: false, changed: false, from, blocked }
 
   // Guard: hanya update bila status belum berubah sejak dibaca (cegah balapan dua request)
   const { data: updated, error: updateError } = await admin
     .from('orders')
-    .update({ ...opts.fields, status: opts.to })
+    .update({
+      ...opts.fields,
+      // Jejak kapan pesanan pickup siap (dasar pengingat "belum diambil")
+      ...(opts.to === 'ready_for_pickup' ? { ready_at: new Date().toISOString() } : {}),
+      status: opts.to,
+    })
     .eq('id', orderId)
     .eq('status', from)
     .select('id')

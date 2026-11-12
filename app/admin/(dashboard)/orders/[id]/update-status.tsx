@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { OrderStatus } from '@/types'
+import { FulfillmentMethod, OrderStatus } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/lib/supabase/client'
 
@@ -24,12 +24,14 @@ interface UpdateOrderStatusProps {
   currentStatus: OrderStatus
   currentReceivedBy?: string | null
   currentDeliveryProof?: string | null
+  fulfillmentMethod?: FulfillmentMethod
 }
 
 const statuses: { value: OrderStatus; label: string }[] = [
   { value: 'pending_payment', label: 'Menunggu Pembayaran' },
   { value: 'paid', label: 'Dibayar' },
   { value: 'processing', label: 'Diproses' },
+  { value: 'ready_for_pickup', label: 'Siap Diambil' },
   { value: 'shipping', label: 'Dikirim' },
   { value: 'delivered', label: 'Diterima' },
   { value: 'cancelled', label: 'Dibatalkan' },
@@ -40,6 +42,7 @@ export function UpdateOrderStatus({
   currentStatus,
   currentReceivedBy,
   currentDeliveryProof,
+  fulfillmentMethod = 'internal',
 }: UpdateOrderStatusProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -61,6 +64,13 @@ export function UpdateOrderStatus({
   }, [currentStatus, currentReceivedBy, currentDeliveryProof])
 
   const showDeliveryFields = status === 'delivered'
+
+  // Pesanan ambil di toko: tanpa "Dikirim"; "Diterima" hanya lewat serah-terima dengan kode ambil.
+  // Pesanan antar: tanpa "Siap Diambil".
+  const pickup = fulfillmentMethod === 'pickup'
+  const options = statuses.filter((s) =>
+    pickup ? s.value !== 'shipping' && s.value !== 'delivered' : s.value !== 'ready_for_pickup'
+  )
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -169,7 +179,7 @@ export function UpdateOrderStatus({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {statuses.map((s) => (
+            {options.map((s) => (
               <SelectItem key={s.value} value={s.value}>
                 {s.label}
               </SelectItem>

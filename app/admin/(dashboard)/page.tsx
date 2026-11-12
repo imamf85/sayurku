@@ -21,7 +21,7 @@ export default async function AdminDashboard() {
       supabase
         .from('orders')
         .select('total')
-        .in('status', ['paid', 'processing', 'shipping', 'delivered']),
+        .in('status', ['paid', 'processing', 'ready_for_pickup', 'shipping', 'delivered']),
       supabase
         .from('orders')
         .select('*')

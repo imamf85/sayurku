@@ -13,10 +13,11 @@ import {
   formatPrice,
   formatDate,
   formatDateTime,
-  getStatusLabel,
   getStatusColor,
 } from '@/lib/utils'
 import { UpdateOrderStatus } from './update-status'
+import { PickupHandover } from './pickup-handover'
+import { FULFILLMENT_LABELS, statusLabelFor } from '@/lib/fulfillment/labels'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
 
@@ -49,6 +50,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     .eq('order_id', params.id)
     .order('created_at', { ascending: false })
 
+  const pickup = order.fulfillment_method === 'pickup'
+
   const trackingUrl = order.tracking_token
     ? `${APP_URL}/track/${order.tracking_token}`
     : null
@@ -61,7 +64,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           <p className="text-gray-500">{formatDateTime(order.created_at)}</p>
         </div>
         <Badge className={getStatusColor(order.status)}>
-          {getStatusLabel(order.status)}
+          {statusLabelFor(order.status, order.fulfillment_method)}
         </Badge>
       </div>
 
@@ -103,6 +106,27 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           </CardContent>
         </Card>
 
+        {pickup && (
+          <Card className="border-blue-200">
+            <CardHeader>
+              <CardTitle>Ambil di Toko</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <p className="text-gray-600">Pelanggan datang sendiri ke toko.</p>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Kode ambil</span>
+                <span className="font-mono font-bold tracking-widest">{order.pickup_code}</span>
+              </div>
+              {order.payment_method === 'cod' && !order.paid_at && (
+                <p className="rounded bg-amber-50 text-amber-800 px-3 py-2">
+                  Bayar di Toko: belum dibayar. Terima {formatPrice(order.total)} saat serah-terima.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {!pickup && (
         <Card>
           <CardHeader>
             <CardTitle>Alamat Pengiriman</CardTitle>
@@ -123,6 +147,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             )}
           </CardContent>
         </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -130,12 +155,28 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
+              <span className="text-gray-500">Metode</span>
+              <span>{FULFILLMENT_LABELS[order.fulfillment_method as keyof typeof FULFILLMENT_LABELS] ?? 'Kurir Sayurku'}</span>
+            </div>
+            {order.distance_km != null && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Jarak</span>
+                <span>{Number(order.distance_km).toFixed(1)} km</span>
+              </div>
+            )}
+            {order.total_weight_grams != null && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Berat (taksiran)</span>
+                <span>{(order.total_weight_grams / 1000).toFixed(1)} kg</span>
+              </div>
+            )}
+            <div className="flex justify-between">
               <span className="text-gray-500">Tanggal</span>
               <span>{formatDate(order.delivery_date)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Waktu</span>
-              <span>{slot?.name || order.delivery_slot}</span>
+              <span>{order.delivery_slot_name || slot?.name || order.delivery_slot}</span>
             </div>
             {order.received_by && (
               <div className="flex justify-between">
@@ -232,6 +273,12 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 <span>-{formatPrice(order.discount)}</span>
               </div>
             )}
+            {order.shipping_fee > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Ongkos kirim</span>
+                <span>{formatPrice(order.shipping_fee)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-lg">
               <span>Total</span>
               <span className="text-green-600">{formatPrice(order.total)}</span>
@@ -274,7 +321,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                   <div className="flex-1 pb-4">
                     <div className="flex items-center gap-2">
                       <Badge className={getStatusColor(history.status)} variant="outline">
-                        {getStatusLabel(history.status)}
+                        {statusLabelFor(history.status, order.fulfillment_method)}
                       </Badge>
                       {history.admin?.name && (
                         <span className="text-xs text-gray-500">
@@ -298,12 +345,31 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         </CardContent>
       </Card>
 
+      {pickup && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Serah-terima Pesanan</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PickupHandover
+              orderId={order.id}
+              status={order.status}
+              payAtStore={order.payment_method === 'cod'}
+              total={order.total}
+              readyAt={order.ready_at}
+              remindedAt={order.pickup_reminded_at}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Update Status</CardTitle>
         </CardHeader>
         <CardContent>
           <UpdateOrderStatus
+            fulfillmentMethod={order.fulfillment_method}
             orderId={order.id}
             currentStatus={order.status}
             currentReceivedBy={order.received_by}

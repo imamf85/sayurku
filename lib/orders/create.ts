@@ -4,6 +4,12 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { calculateCartItemTotal } from '@/lib/utils'
 import { isValidDateString } from '@/lib/time'
+import { getSettingsFresh } from '@/lib/settings'
+import { haversineKm, roundKm } from '@/lib/fulfillment/distance'
+import { cartWeightGrams } from '@/lib/fulfillment/weight'
+import { allowedPaymentMethods, eligible, timingOf } from '@/lib/fulfillment/eligibility'
+import { REASON_MESSAGES } from '@/lib/fulfillment/reasons'
+import { getInternalLoads } from '@/lib/fulfillment/slot-load'
 import {
   calculateTotal,
   calculateVoucherDiscount,
@@ -14,7 +20,10 @@ import { validateSchedule, SCHEDULE_ERROR_MESSAGES } from '@/lib/orders/schedule
 import type { CartItem, DeliverySlot } from '@/types'
 
 export const createOrderSchema = z.object({
-  addressId: z.string().uuid(),
+  // Grab (kurir online) belum tersedia di Fase 2; ditambahkan di Fase 3
+  fulfillmentMethod: z.enum(['internal', 'pickup']).default('internal'),
+  // Wajib bila diantar; diabaikan untuk ambil di toko
+  addressId: z.string().uuid().optional().nullable(),
   deliveryDate: z.string().refine(isValidDateString, 'Tanggal tidak valid'),
   deliverySlot: z.string().uuid(),
   paymentMethod: z.enum(['qris', 'transfer', 'cod']),
@@ -42,9 +51,14 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
 
   const voucherCode = input.voucherCode?.trim().toUpperCase() || null
 
+  const method = input.fulfillmentMethod
+  const settings = await getSettingsFresh() // keputusan memakai data fresh, bukan cache (§11.3)
+
   const [cartRes, addressRes, profileRes, slotsRes, voucherRes] = await Promise.all([
     admin.from('cart_items').select('*, product:products(*)').eq('user_id', userId),
-    admin.from('addresses').select('*').eq('id', input.addressId).eq('user_id', userId).maybeSingle(),
+    method === 'internal' && input.addressId
+      ? admin.from('addresses').select('*').eq('id', input.addressId).eq('user_id', userId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     admin.from('profiles').select('id, full_name, phone').eq('id', userId).maybeSingle(),
     admin.from('delivery_slots').select('*').eq('is_active', true),
     voucherCode
@@ -56,7 +70,9 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
   if (cartItems.length === 0) throw new OrderError('CART_EMPTY', 'Keranjang kosong')
 
   const address = addressRes.data
-  if (!address) throw new OrderError('ADDRESS_NOT_FOUND', 'Alamat pengiriman tidak ditemukan')
+  if (method === 'internal' && !address) {
+    throw new OrderError('ADDRESS_NOT_FOUND', 'Alamat pengiriman tidak ditemukan')
+  }
 
   for (const item of cartItems) {
     if (!item.product || !item.product.is_active) {
@@ -92,6 +108,54 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
   })
   if (scheduleError) throw new OrderError(scheduleError, SCHEDULE_ERROR_MESSAGES[scheduleError], 409)
 
+  // Metode pengiriman: aturan kelayakan dihitung ulang di server (invarian I1)
+  const slot = (slotsRes.data || []).find((sl: DeliverySlot) => sl.id === input.deliverySlot) as DeliverySlot
+  const timing = timingOf(slot)
+
+  let distanceKm: number | null = null
+  if (method === 'internal' && address) {
+    if (address.latitude == null || address.longitude == null) {
+      throw new OrderError('NO_LOCATION', REASON_MESSAGES.NO_LOCATION, 409)
+    }
+    distanceKm = roundKm(
+      haversineKm(
+        { latitude: settings.store_latitude, longitude: settings.store_longitude },
+        { latitude: address.latitude, longitude: address.longitude }
+      )
+    )
+  }
+
+  const weightGrams = cartWeightGrams(
+    cartItems.map((i) => ({ quantity: i.quantity, product: i.product! })),
+    settings
+  )
+
+  // Beban kurir internal pada slot + tanggal ini (pemeriksaan final tetap di RPC, race-safe)
+  const internalLoad =
+    method === 'internal' && slot.internal_capacity != null
+      ? (await getInternalLoads(admin, input.deliveryDate, settings.payment_hold_minutes))[slot.id] ?? 0
+      : 0
+
+  const fulfillment = eligible(method, {
+    distanceKm,
+    cartFlags: Array.from(new Set(cartItems.flatMap((i) => i.product?.flags ?? []))),
+    cartWeightGrams: weightGrams,
+    hasPreorder,
+    slot,
+    now: new Date(),
+    settings,
+    internalLoad,
+  })
+  if (!fulfillment.ok) {
+    throw new OrderError(fulfillment.reason, REASON_MESSAGES[fulfillment.reason], 409)
+  }
+
+  if (!allowedPaymentMethods(method).includes(input.paymentMethod)) {
+    throw new OrderError('PAYMENT_NOT_ALLOWED', 'Metode pembayaran tidak tersedia untuk pengiriman ini', 409)
+  }
+
+  const shippingFee = method === 'internal' ? settings.internal_fee : 0
+
   // Harga (perilaku saat ini dipertahankan: harga produk normal, tanpa promo, lihat K17)
   const subtotal = cartItems.reduce((acc, item) => acc + calculateCartItemTotal(item), 0)
 
@@ -106,7 +170,7 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
     voucherId = voucher.id
   }
 
-  const total = calculateTotal(subtotal, discount)
+  const total = calculateTotal(subtotal, discount, shippingFee)
 
   const items = cartItems.map((item) => ({
     product_id: item.product_id,
@@ -133,16 +197,35 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
       discount,
       voucher_id: voucherId,
       total,
-      address_snapshot: {
-        label: address.label,
-        address: address.address,
-        province: address.province || '',
-        city: address.city,
-        district: address.district,
-        village: address.village || '',
-        postal_code: address.postal_code,
-        notes: address.notes,
-      },
+      // Pickup memakai snapshot alamat TOKO agar halaman/notifikasi yang membaca alamat tidak crash
+      address_snapshot: address
+        ? {
+            label: address.label,
+            address: address.address,
+            province: address.province || '',
+            city: address.city,
+            district: address.district,
+            village: address.village || '',
+            postal_code: address.postal_code,
+            notes: address.notes,
+          }
+        : {
+            label: 'Ambil di Toko',
+            address: settings.store_address || settings.store_name,
+            province: '',
+            city: '',
+            district: '',
+            village: '',
+            postal_code: '',
+            notes: null,
+            is_pickup: true,
+          },
+      fulfillment_method: method,
+      fulfillment_timing: timing,
+      shipping_fee: shippingFee,
+      distance_km: distanceKm,
+      total_weight_grams: weightGrams,
+      delivery_slot_name: slot.name,
       delivery_date: input.deliveryDate,
       delivery_slot: input.deliverySlot,
       notes: input.notes || null,
@@ -151,6 +234,9 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
   })
 
   if (error) {
+    if (error.message.includes('SLOT_FULL')) {
+      throw new OrderError('SLOT_FULL', REASON_MESSAGES.SLOT_FULL, 409)
+    }
     if (error.message.includes('VOUCHER_EXHAUSTED')) {
       throw new OrderError('VOUCHER_EXHAUSTED', VOUCHER_ERROR_MESSAGES.EXHAUSTED, 409)
     }
@@ -158,5 +244,5 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
     throw new OrderError('CREATE_FAILED', 'Gagal membuat pesanan', 500)
   }
 
-  return data as { id: string; order_number: string }
+  return data as { id: string; order_number: string; pickup_code: string | null }
 }

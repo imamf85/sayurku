@@ -13,8 +13,10 @@ import {
   Calendar,
   Clock,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Store,
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -47,6 +49,9 @@ interface Order {
   created_at: string
   delivery_date: string
   notes: string | null
+  fulfillment_method?: 'internal' | 'grab' | 'pickup'
+  shipping_fee?: number
+  delivery_slot_name?: string | null
   address_snapshot: {
     label: string
     address: string
@@ -76,9 +81,18 @@ const STATUS_FLOW: { status: OrderStatus; label: string; icon: any; color: strin
   { status: 'delivered', label: 'Pesanan Tiba', icon: CheckCircle2, color: 'green' },
 ]
 
+// Pesanan ambil di toko: tidak ada "Dikirim"; selesai lewat kode ambil
+const PICKUP_FLOW: typeof STATUS_FLOW = [
+  { status: 'processing', label: 'Sedang Diproses', icon: Package, color: 'blue' },
+  { status: 'ready_for_pickup', label: 'Siap Diambil', icon: Store, color: 'purple' },
+]
+
 export function ManageOrderClient({ order, customerInfo, token }: ManageOrderClientProps) {
   const [updating, setUpdating] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(order.status)
+  const [pickupCode, setPickupCode] = useState('')
+  const pickup = order.fulfillment_method === 'pickup'
+  const flow = pickup ? PICKUP_FLOW : STATUS_FLOW
   const { toast } = useToast()
 
   const handleUpdateStatus = async (newStatus: OrderStatus) => {
@@ -105,7 +119,7 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
       setCurrentStatus(newStatus)
       toast({
         title: 'Status berhasil diupdate',
-        description: `Pesanan ${order.order_number} diupdate ke ${STATUS_FLOW.find(s => s.status === newStatus)?.label}`,
+        description: `Pesanan ${order.order_number} diupdate ke ${[...STATUS_FLOW, ...PICKUP_FLOW].find(s => s.status === newStatus)?.label}`,
       })
     } catch (error: any) {
       toast({
@@ -113,6 +127,29 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
         description: error.message,
         variant: 'destructive',
       })
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handleHandover = async () => {
+    if (!/^\d{6}$/.test(pickupCode.trim())) {
+      toast({ title: 'Kode ambil terdiri dari 6 angka', variant: 'destructive' })
+      return
+    }
+    setUpdating(true)
+    try {
+      const response = await fetch('/api/admin/orders/handover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, code: pickupCode.trim() }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Gagal menyerahkan pesanan')
+      setCurrentStatus('delivered')
+      toast({ title: 'Pesanan diserahkan', description: `Pesanan ${order.order_number} sudah diambil` })
+    } catch (error: any) {
+      toast({ title: 'Gagal menyerahkan pesanan', description: error.message, variant: 'destructive' })
     } finally {
       setUpdating(false)
     }
@@ -128,6 +165,7 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
     pending_payment: 'bg-amber-100 text-amber-800',
     paid: 'bg-blue-100 text-blue-800',
     processing: 'bg-blue-100 text-blue-800',
+    ready_for_pickup: 'bg-blue-100 text-blue-800',
     shipping: 'bg-purple-100 text-purple-800',
     delivered: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800',
@@ -137,6 +175,7 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
     pending_payment: 'Menunggu Pembayaran',
     paid: 'Dibayar',
     processing: 'Sedang Diproses',
+    ready_for_pickup: 'Siap Diambil',
     shipping: 'Dalam Pengiriman',
     delivered: 'Pesanan Tiba',
     cancelled: 'Dibatalkan',
@@ -144,13 +183,13 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
 
   // Filter available actions based on current status
   const getAvailableActions = () => {
-    const currentIndex = STATUS_FLOW.findIndex(s => s.status === currentStatus)
+    const currentIndex = flow.findIndex(s => s.status === currentStatus)
     if (currentIndex === -1) {
       // If current status is pending_payment or paid, start from processing
-      return STATUS_FLOW
+      return flow
     }
     // Return current and next statuses
-    return STATUS_FLOW.slice(currentIndex)
+    return flow.slice(currentIndex)
   }
 
   const availableActions = getAvailableActions()
@@ -229,20 +268,30 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
             <div className="flex items-start gap-2 text-sm">
               <Clock className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
-                <p className="text-gray-500">Waktu Pengiriman</p>
-                <p className="font-medium">{order.delivery_slot.name}</p>
+                <p className="text-gray-500">{pickup ? 'Waktu Pengambilan' : 'Waktu Pengiriman'}</p>
+                <p className="font-medium">{order.delivery_slot_name || order.delivery_slot.name}</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-              <div>
-                <p className="text-gray-500">Alamat</p>
-                <p className="font-medium">
-                  {order.address_snapshot.address}, {order.address_snapshot.district}, {order.address_snapshot.city}
-                  {order.address_snapshot.province && `, ${order.address_snapshot.province}`} {order.address_snapshot.postal_code}
-                </p>
+            {pickup ? (
+              <div className="flex items-start gap-2 text-sm">
+                <Store className="w-4 h-4 text-gray-400 mt-0.5" />
+                <div>
+                  <p className="text-gray-500">Metode</p>
+                  <p className="font-medium">Ambil di Toko (pelanggan datang sendiri)</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-start gap-2 text-sm">
+                <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                <div>
+                  <p className="text-gray-500">Alamat</p>
+                  <p className="font-medium">
+                    {order.address_snapshot.address}, {order.address_snapshot.district}, {order.address_snapshot.city}
+                    {order.address_snapshot.province && `, ${order.address_snapshot.province}`} {order.address_snapshot.postal_code}
+                  </p>
+                </div>
+              </div>
+            )}
             {order.notes && (
               <div className="flex items-start gap-2 text-sm">
                 <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -275,6 +324,12 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
               )
             })}
           </div>
+          {!!order.shipping_fee && order.shipping_fee > 0 && (
+            <div className="flex justify-between text-sm mt-2">
+              <span className="text-gray-600">Ongkos kirim</span>
+              <span className="font-medium">{formatPrice(order.shipping_fee)}</span>
+            </div>
+          )}
           <Separator className="my-3" />
           <div className="flex justify-between font-bold">
             <span>Total</span>
@@ -344,6 +399,29 @@ export function ManageOrderClient({ order, customerInfo, token }: ManageOrderCli
                 Mengupdate status...
               </div>
             )}
+          </div>
+        )}
+
+        {pickup && currentStatus !== 'delivered' && currentStatus !== 'cancelled' && (
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+            <h2 className="font-medium mb-1">Serahkan Pesanan</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Minta kode ambil 6 angka dari pelanggan.
+              {order.payment_method === 'cod' && ' Pembayaran diterima di toko saat serah-terima.'}
+            </p>
+            <div className="flex gap-2">
+              <Input
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Kode ambil"
+                value={pickupCode}
+                onChange={(e) => setPickupCode(e.target.value.replace(/\D/g, ''))}
+                className="text-center tracking-widest"
+              />
+              <Button onClick={handleHandover} disabled={updating || pickupCode.length !== 6} className="bg-green-600 hover:bg-green-700">
+                Serahkan
+              </Button>
+            </div>
           </div>
         )}
 

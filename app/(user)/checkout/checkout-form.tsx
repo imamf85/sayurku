@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import useSWR from 'swr'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { addDays } from 'date-fns'
@@ -25,12 +26,20 @@ import { localDateString } from '@/lib/time'
 import { calculateTotal, calculateVoucherDiscount, checkVoucher, VOUCHER_ERROR_MESSAGES } from '@/lib/orders/pricing'
 import { useToast } from '@/hooks/use-toast'
 import { AddressDialog } from './address-dialog'
+import { FulfillmentSection } from './fulfillment-section'
+import { AddressPinPrompt } from './address-pin-prompt'
+import type { StoreSettings } from '@/lib/settings-schema'
+import { haversineKm } from '@/lib/fulfillment/distance'
+import { cartWeightGrams } from '@/lib/fulfillment/weight'
+import { allowedPaymentMethods, eligible, type EligibilityContext } from '@/lib/fulfillment/eligibility'
+import { REASON_MESSAGES, type ReasonCode } from '@/lib/fulfillment/reasons'
 
 interface CheckoutFormProps {
   cartItems: CartItem[]
   addresses: Address[]
   profile: Profile | null
   deliverySlots: DeliverySlot[]
+  settings: StoreSettings
   hasPreorder: boolean
   maxPreorderDays: number
 }
@@ -61,6 +70,7 @@ export function CheckoutForm({
   addresses,
   profile,
   deliverySlots,
+  settings,
   hasPreorder,
   maxPreorderDays,
 }: CheckoutFormProps) {
@@ -90,6 +100,97 @@ export function CheckoutForm({
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qris')
 
+  // ─── Cara terima pesanan ──────────────────────────────────────────────────
+  const cartFlags = useMemo(
+    () => Array.from(new Set(cartItems.flatMap((i) => i.product?.flags ?? []))),
+    [cartItems]
+  )
+  const hasPickupOnlyItem = cartFlags.includes('pickup_only')
+  const [method, setMethod] = useState<'internal' | 'pickup'>(hasPickupOnlyItem ? 'pickup' : 'internal')
+
+  const weightGrams = useMemo(
+    () => cartWeightGrams(cartItems.map((i) => ({ quantity: i.quantity, product: i.product! })), settings),
+    [cartItems, settings]
+  )
+
+  const hasPin = selectedAddress?.latitude != null && selectedAddress?.longitude != null
+  const distanceKm = useMemo(
+    () =>
+      method === 'internal' && selectedAddress && hasPin
+        ? haversineKm(
+            { latitude: settings.store_latitude, longitude: settings.store_longitude },
+            { latitude: selectedAddress.latitude!, longitude: selectedAddress.longitude! }
+          )
+        : null,
+    [method, selectedAddress, hasPin, settings.store_latitude, settings.store_longitude]
+  )
+
+  // Beban kurir internal per slot (hanya bila ada slot berkapasitas); hanya untuk tampilan
+  const hasCapacitySlots = deliverySlots.some((sl) => sl.internal_capacity != null)
+  const dateKey = deliveryDate ? localDateString(deliveryDate) : null
+  const { data: loadData, mutate: refreshLoads } = useSWR<{ loads: Record<string, number> }>(
+    method === 'internal' && hasCapacitySlots && dateKey ? `/api/checkout/slot-load?date=${dateKey}` : null,
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { loads: {} })),
+    { revalidateOnFocus: false }
+  )
+
+  const baseCtx = (slot: DeliverySlot, m: 'internal' | 'pickup'): { m: typeof m; ctx: EligibilityContext } => ({
+    m,
+    ctx: {
+      distanceKm: m === 'internal' ? distanceKm : null,
+      cartFlags,
+      cartWeightGrams: weightGrams,
+      hasPreorder,
+      slot,
+      now: new Date(),
+      settings,
+      internalLoad: loadData?.loads?.[slot.id] ?? 0,
+    },
+  })
+
+  // Alasan per slot untuk metode terpilih → slot nonaktif + keterangan
+  const slotReasons = useMemo(() => {
+    const out: Record<string, string | null> = {}
+    for (const sl of deliverySlots) {
+      const { m, ctx } = baseCtx(sl, method)
+      const r = eligible(m, ctx)
+      out[sl.id] = r.ok ? null : REASON_MESSAGES[r.reason]
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliverySlots, method, distanceKm, cartFlags, weightGrams, hasPreorder, settings, loadData, deliveryDate])
+
+  // Alasan level-metode (bukan per slot) untuk kartu pilihan
+  const methodReasons = useMemo(() => {
+    const probe: DeliverySlot = {
+      id: 'probe', name: '', slot_type: 'scheduled', time_start: null, time_end: null,
+      is_active: true, sort_order: 0, applies_to: 'both', internal_capacity: null,
+    }
+    const reasonFor = (m: 'internal' | 'pickup'): ReasonCode | null => {
+      const { ctx } = baseCtx(probe, m)
+      // internal: bila belum ada pin, jarak belum diketahui → tidak diblokir di level kartu (ada prompt pin)
+      const withDistance = m === 'internal' && !hasPin ? { ...ctx, distanceKm: settings.internal_min_km } : ctx
+      const r = eligible(m, withDistance)
+      return r.ok ? null : r.reason
+    }
+    return { internal: reasonFor('internal'), pickup: reasonFor('pickup') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distanceKm, hasPin, cartFlags, settings])
+
+  // Bila pilihan saat ini jadi tidak valid, pindah ke metode lain yang tersedia
+  useEffect(() => {
+    if (methodReasons[method] && !methodReasons[method === 'internal' ? 'pickup' : 'internal']) {
+      setMethod(method === 'internal' ? 'pickup' : 'internal')
+    }
+  }, [methodReasons, method])
+
+  const allowedPayments = allowedPaymentMethods(method)
+  useEffect(() => {
+    if (!allowedPayments.includes(paymentMethod)) setPaymentMethod(allowedPayments[0])
+  }, [allowedPayments, paymentMethod])
+
+  const shippingFee = method === 'internal' ? settings.internal_fee : 0
+
   const [fullName, setFullName] = useState(profile?.full_name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
 
@@ -103,7 +204,7 @@ export function CheckoutForm({
   // Preview saja; server menghitung ulang diskon dan total saat order dibuat
   const discount = calculateVoucherDiscount(subtotal, appliedVoucher)
 
-  const total = calculateTotal(subtotal, discount)
+  const total = calculateTotal(subtotal, discount, shippingFee)
 
   const handleApplyVoucher = async () => {
     if (!voucherCode.trim()) return
@@ -144,9 +245,28 @@ export function CheckoutForm({
   }
 
   const handleSubmit = async () => {
-    if (!selectedAddress) {
+    if (method === 'internal') {
+      if (!selectedAddress) {
+        toast({
+          title: 'Pilih alamat pengiriman',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (!hasPin) {
+        toast({
+          title: 'Pasang titik lokasi alamat',
+          description: 'Titik lokasi dibutuhkan untuk menghitung jarak pengiriman',
+          variant: 'destructive',
+        })
+        return
+      }
+    }
+
+    if (methodReasons[method]) {
       toast({
-        title: 'Pilih alamat pengiriman',
+        title: 'Cara terima pesanan tidak tersedia',
+        description: REASON_MESSAGES[methodReasons[method]!],
         variant: 'destructive',
       })
       return
@@ -162,7 +282,16 @@ export function CheckoutForm({
 
     if (!deliverySlot) {
       toast({
-        title: 'Pilih waktu pengiriman',
+        title: method === 'pickup' ? 'Pilih waktu pengambilan' : 'Pilih waktu pengiriman',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (slotReasons[deliverySlot]) {
+      toast({
+        title: 'Waktu tidak tersedia',
+        description: slotReasons[deliverySlot]!,
         variant: 'destructive',
       })
       return
@@ -185,7 +314,8 @@ export function CheckoutForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          addressId: selectedAddress.id,
+          fulfillmentMethod: method,
+          addressId: method === 'internal' ? selectedAddress?.id : null,
           deliveryDate: localDateString(deliveryDate),
           deliverySlot,
           paymentMethod,
@@ -203,6 +333,8 @@ export function CheckoutForm({
       const result = await res.json().catch(() => null)
 
       if (!res.ok || !result?.orderId) {
+        // Slot bisa penuh karena checkout lain: segarkan beban slot
+        if (result?.error?.code === 'SLOT_FULL') refreshLoads()
         toast({
           title: 'Gagal membuat pesanan',
           description: result?.error?.message || 'Terjadi kesalahan, silakan coba lagi',
@@ -262,6 +394,25 @@ export function CheckoutForm({
         </section>
       )}
 
+      <FulfillmentSection
+        method={method}
+        onChange={setMethod}
+        reasons={methodReasons}
+        internalFee={settings.internal_fee}
+      />
+
+      {method === 'pickup' && (
+        <section className="bg-white rounded-lg p-4 mb-4 text-sm">
+          <h2 className="font-medium mb-2">Lokasi Toko</h2>
+          <p className="font-medium">{settings.store_name}</p>
+          {settings.store_address && <p className="text-gray-600">{settings.store_address}</p>}
+          <p className="text-gray-500 mt-1">
+            Buka {settings.store_open} - {settings.store_close} WIB. Kode ambil dikirim setelah pesanan dibuat.
+          </p>
+        </section>
+      )}
+
+      {method === 'internal' && (
       <section className="bg-white rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium">Alamat Pengiriman</h2>
@@ -295,11 +446,24 @@ export function CheckoutForm({
         ) : (
           <p className="text-sm text-gray-500">Belum ada alamat tersimpan</p>
         )}
+
+        {selectedAddress && !hasPin && (
+          <AddressPinPrompt
+            address={selectedAddress}
+            onSaved={(updated) => setSelectedAddress(updated)}
+          />
+        )}
+
+        {distanceKm != null && (
+          <p className="text-xs text-gray-500 mt-3">Jarak dari toko ± {distanceKm.toFixed(1)} km</p>
+        )}
       </section>
+      )}
 
       <section className="bg-white rounded-lg p-4 mb-4">
-        <h2 className="font-medium mb-3">Waktu Pengiriman</h2>
+        <h2 className="font-medium mb-3">{method === 'pickup' ? 'Waktu Pengambilan' : 'Waktu Pengiriman'}</h2>
         <DeliverySlotPicker
+          unavailableReasons={slotReasons}
           slots={deliverySlots}
           selectedDate={deliveryDate}
           selectedSlot={deliverySlot}
@@ -313,13 +477,13 @@ export function CheckoutForm({
       <section className="bg-white rounded-lg p-4 mb-4">
         <h2 className="font-medium mb-3">Metode Pembayaran</h2>
         <div className="space-y-2">
-          {PAYMENT_METHODS.map((method) => {
-            const Icon = method.icon
-            const isSelected = paymentMethod === method.id
+          {PAYMENT_METHODS.filter((pm) => allowedPayments.includes(pm.id)).map((pm) => {
+            const Icon = pm.icon
+            const isSelected = paymentMethod === pm.id
             return (
               <button
-                key={method.id}
-                onClick={() => setPaymentMethod(method.id)}
+                key={pm.id}
+                onClick={() => setPaymentMethod(pm.id)}
                 className={cn(
                   'w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left',
                   isSelected
@@ -334,8 +498,12 @@ export function CheckoutForm({
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium">{method.name}</p>
-                  <p className="text-sm text-gray-500">{method.description}</p>
+                  <p className="font-medium">
+                    {pm.id === 'cod' && method === 'pickup' ? 'Bayar di Toko' : pm.name}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {pm.id === 'cod' && method === 'pickup' ? 'Bayar saat mengambil pesanan' : pm.description}
+                  </p>
                 </div>
                 {isSelected && (
                   <Check className="h-5 w-5 text-green-600" />
@@ -413,6 +581,12 @@ export function CheckoutForm({
             <div className="flex justify-between text-sm text-green-600">
               <span>Diskon</span>
               <span>-{formatPrice(discount)}</span>
+            </div>
+          )}
+          {method === 'internal' && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Ongkos kirim</span>
+              <span>{shippingFee > 0 ? formatPrice(shippingFee) : 'Gratis'}</span>
             </div>
           )}
           <div className="flex justify-between font-bold">
