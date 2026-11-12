@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Product, Promo } from '@/types'
 import { formatPrice, formatUnit, getDiscountedPrice } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { primaryBadge } from '@/lib/products/flags'
 import { useToast } from '@/hooks/use-toast'
 
 const supabase = createClient()
@@ -29,6 +30,7 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
 
   const discountedPrice = getDiscountedPrice(product, promo)
   const hasDiscount = discountedPrice < product.price
+  const flagBadge = primaryBadge(product.flags)
 
   // Check wishlist status on mount
   useEffect(() => {
@@ -167,6 +169,11 @@ export function ProductCard({ product, promo, isInWishlist: initialWishlist = fa
           {product.is_bulk_pricing && !product.is_preorder && (
             <Badge className="absolute top-2 left-2 bg-purple-500">
               Curah
+            </Badge>
+          )}
+          {flagBadge && (
+            <Badge className={`absolute bottom-2 left-2 ${flagBadge.badgeClass}`}>
+              {flagBadge.badge}
             </Badge>
           )}
           {hasDiscount && (

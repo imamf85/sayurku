@@ -23,9 +23,11 @@ import { Plus, Pencil, Upload, ImageIcon, Search, Loader2, Trash2 } from 'lucide
 import { formatPrice, formatUnit } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Unit } from '@/types'
+import { PRODUCT_FLAGS, PRODUCT_FLAG_KEYS, isProductFlag, type ProductFlag } from '@/lib/products/flags'
 
 interface Product {
   id: string
+  flags?: string[]
   code: string
   name: string
   image_url: string | null
@@ -46,6 +48,8 @@ export default function ProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [flagFilter, setFlagFilter] = useState<ProductFlag | ''>('')
+  const [flagging, setFlagging] = useState(false)
 
   useEffect(() => {
     fetchProducts()
@@ -71,6 +75,7 @@ export default function ProductsPage() {
         product.code.toLowerCase().includes(q)
       if (!matches) return false
     }
+    if (flagFilter && !(product.flags || []).includes(flagFilter)) return false
     return true
   })
 
@@ -134,6 +139,35 @@ export default function ProductsPage() {
     }
   }
 
+  const handleBulkFlag = async (mode: 'add' | 'remove', flag: string) => {
+    if (!isProductFlag(flag) || selectedIds.size === 0) return
+    setFlagging(true)
+    try {
+      const res = await fetch('/api/admin/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          ...(mode === 'add' ? { addFlags: [flag] } : { removeFlags: [flag] }),
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Gagal mengubah penanda')
+      toast({
+        title: `Penanda "${PRODUCT_FLAGS[flag].label}" ${mode === 'add' ? 'ditambahkan ke' : 'dihapus dari'} ${result.updated} produk`,
+      })
+      await fetchProducts()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Gagal mengubah penanda',
+        variant: 'destructive',
+      })
+    } finally {
+      setFlagging(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -152,6 +186,22 @@ export default function ProductsPage() {
               className="pl-9"
             />
           </div>
+          <select
+            value={flagFilter}
+            onChange={(e) => {
+              setFlagFilter(e.target.value as ProductFlag | '')
+              setSelectedIds(new Set())
+            }}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            aria-label="Filter penanda"
+          >
+            <option value="">Semua penanda</option>
+            {PRODUCT_FLAG_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {PRODUCT_FLAGS[k].label}
+              </option>
+            ))}
+          </select>
           <div className="flex gap-2">
             <Link href="/admin/products/images">
               <Button variant="outline">
@@ -182,6 +232,34 @@ export default function ProductsPage() {
             {selectedIds.size} produk dipilih
           </span>
           <div className="flex items-center gap-2">
+            <select
+              disabled={flagging}
+              value=""
+              onChange={(e) => e.target.value && handleBulkFlag('add', e.target.value)}
+              className="h-8 rounded-md border border-input bg-white px-2 text-xs"
+              aria-label="Tambah penanda"
+            >
+              <option value="">+ Penanda</option>
+              {PRODUCT_FLAG_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {PRODUCT_FLAGS[k].label}
+                </option>
+              ))}
+            </select>
+            <select
+              disabled={flagging}
+              value=""
+              onChange={(e) => e.target.value && handleBulkFlag('remove', e.target.value)}
+              className="h-8 rounded-md border border-input bg-white px-2 text-xs"
+              aria-label="Hapus penanda"
+            >
+              <option value="">- Penanda</option>
+              {PRODUCT_FLAG_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {PRODUCT_FLAGS[k].label}
+                </option>
+              ))}
+            </select>
             <Button
               variant="ghost"
               size="sm"
@@ -316,6 +394,11 @@ export default function ProductsPage() {
                                   PO
                                 </Badge>
                               )}
+                              {(product.flags || []).filter(isProductFlag).map((f) => (
+                                <Badge key={f} variant="secondary" className="text-[10px]">
+                                  {PRODUCT_FLAGS[f].label}
+                                </Badge>
+                              ))}
                             </div>
                           </td>
                           <td className="p-4 text-center">

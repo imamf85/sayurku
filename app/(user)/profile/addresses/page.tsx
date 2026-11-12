@@ -50,6 +50,11 @@ export default async function AddressesPage() {
                   Patokan: {address.notes}
                 </p>
               )}
+              {(address.latitude == null || address.longitude == null) && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Titik lokasi belum diatur. Edit alamat untuk memasang pin agar pilihan pengiriman akurat.
+                </p>
+              )}
               <AddressForm address={address} mode="edit" />
             </div>
           ))}

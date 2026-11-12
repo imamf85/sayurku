@@ -45,6 +45,8 @@ export interface Address {
   village: string
   postal_code: string
   notes: string | null
+  latitude: number | null
+  longitude: number | null
   is_default: boolean
   created_at: string
 }
@@ -86,6 +88,8 @@ export interface Product {
   preorder_days: number | null
   is_bulk_pricing: boolean
   bulk_min_price: number | null
+  flags: string[]
+  weight_grams: number | null
   created_at: string
   updated_at: string
   category?: Category

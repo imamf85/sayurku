@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sanitizeFlags } from '@/lib/products/flags'
+
+// Rapikan field baru sebelum ditulis: flags hanya nilai yang dikenal, berat integer positif atau null
+function normalizeProductBody(body: Record<string, any>) {
+  const out = { ...body }
+  if ('flags' in out) out.flags = sanitizeFlags(out.flags)
+  if ('weight_grams' in out) {
+    const w = Number(out.weight_grams)
+    out.weight_grams = Number.isInteger(w) && w > 0 ? w : null
+  }
+  return out
+}
 
 async function verifyAdmin() {
   const supabase = createClient()
@@ -47,7 +59,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await request.json()
+  const body = normalizeProductBody(await request.json())
   const adminClient = createAdminClient()
 
   const { data, error } = await adminClient
@@ -69,7 +81,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await request.json()
+  const body = normalizeProductBody(await request.json())
   const { id, ...updateData } = body
   const adminClient = createAdminClient()
 
@@ -85,6 +97,49 @@ export async function PUT(request: NextRequest) {
   }
 
   return NextResponse.json(data)
+}
+
+// Tambah/hapus penanda secara massal: { ids: string[], addFlags?: string[], removeFlags?: string[] }
+export async function PATCH(request: NextRequest) {
+  const user = await verifyAdmin()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json().catch(() => null)
+  const ids: string[] = Array.isArray(body?.ids) ? body.ids : []
+  const addFlags = sanitizeFlags(body?.addFlags)
+  const removeFlags = sanitizeFlags(body?.removeFlags)
+
+  if (ids.length === 0 || (addFlags.length === 0 && removeFlags.length === 0)) {
+    return NextResponse.json({ error: 'ids dan minimal satu penanda wajib diisi' }, { status: 400 })
+  }
+
+  const adminClient = createAdminClient()
+  const { data: rows, error } = await adminClient.from('products').select('id, flags').in('id', ids)
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
+  // Kelompokkan produk berdasarkan hasil akhir agar jumlah query minimal
+  const groups = new Map<string, string[]>()
+  for (const row of rows || []) {
+    const next = sanitizeFlags([...(row.flags || []), ...addFlags]).filter((f) => !removeFlags.includes(f))
+    const key = JSON.stringify(next.sort())
+    groups.set(key, [...(groups.get(key) || []), row.id])
+  }
+
+  for (const [key, groupIds] of Array.from(groups.entries())) {
+    const { error: updateError } = await adminClient
+      .from('products')
+      .update({ flags: JSON.parse(key) })
+      .in('id', groupIds)
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 400 })
+    }
+  }
+
+  return NextResponse.json({ success: true, updated: rows?.length || 0 })
 }
 
 export async function DELETE(request: NextRequest) {

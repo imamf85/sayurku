@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Address } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { LocationPickerField } from '@/components/map/LocationPickerField'
 import { cn } from '@/lib/utils'
 import {
   Region,
@@ -73,6 +74,8 @@ export function AddressDialog({
     village: '',
     postal_code: '',
     notes: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
   })
 
   // Load provinces when form is shown
@@ -171,6 +174,8 @@ export function AddressDialog({
       village: '',
       postal_code: '',
       notes: '',
+      latitude: null,
+      longitude: null,
     })
     setSelectedProvinceId('')
     setSelectedCityId('')
@@ -381,6 +386,19 @@ export function AddressDialog({
               />
             </div>
 
+            {/* Titik lokasi (untuk jarak & kurir online) */}
+            <LocationPickerField
+              label="Titik Lokasi (untuk pengiriman)"
+              value={
+                form.latitude != null && form.longitude != null
+                  ? { latitude: form.latitude, longitude: form.longitude }
+                  : null
+              }
+              onChange={(v) =>
+                setForm((f) => ({ ...f, latitude: v?.latitude ?? null, longitude: v?.longitude ?? null }))
+              }
+            />
+
             <div className="flex gap-2">
               {addresses.length > 0 && (
                 <Button
@@ -426,6 +444,9 @@ export function AddressDialog({
                       {address.district}, {address.city}
                       {address.province && `, ${address.province}`} {address.postal_code}
                     </p>
+                    {(address.latitude == null || address.longitude == null) && (
+                      <p className="text-xs text-amber-600 mt-1">Titik lokasi belum diatur</p>
+                    )}
                   </div>
                   {selectedAddress?.id === address.id && (
                     <Check className="h-5 w-5 text-green-600 flex-shrink-0" />

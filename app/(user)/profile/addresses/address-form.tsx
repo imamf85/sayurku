@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch'
 import { Address } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { LocationPickerField } from '@/components/map/LocationPickerField'
 import {
   Region,
   getProvinces,
@@ -66,6 +67,8 @@ export function AddressForm({ address, mode }: AddressFormProps) {
     village: address?.village || '',
     postal_code: address?.postal_code || '',
     notes: address?.notes || '',
+    latitude: (address?.latitude ?? null) as number | null,
+    longitude: (address?.longitude ?? null) as number | null,
     is_default: address?.is_default || false,
   })
 
@@ -422,6 +425,19 @@ export function AddressForm({ address, mode }: AddressFormProps) {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
+
+          {/* Titik lokasi (untuk jarak & kurir online) */}
+          <LocationPickerField
+            label="Titik Lokasi (untuk pengiriman)"
+            value={
+              form.latitude != null && form.longitude != null
+                ? { latitude: form.latitude, longitude: form.longitude }
+                : null
+            }
+            onChange={(v) =>
+              setForm((f) => ({ ...f, latitude: v?.latitude ?? null, longitude: v?.longitude ?? null }))
+            }
+          />
 
           {/* Default Address Switch */}
           <div className="flex items-center justify-between">

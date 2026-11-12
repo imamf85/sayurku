@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -19,6 +20,7 @@ import { MultiImageUpload } from '@/components/admin/MultiImageUpload'
 import { Product, Category, Unit } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import { slugify } from '@/lib/utils'
+import { PRODUCT_FLAGS, PRODUCT_FLAG_KEYS, sanitizeFlags, type ProductFlag } from '@/lib/products/flags'
 
 interface ProductFormProps {
   product?: Product
@@ -59,7 +61,18 @@ export function ProductForm({ product, categories }: ProductFormProps) {
     preorder_days: product?.preorder_days?.toString() || '',
     is_bulk_pricing: product?.is_bulk_pricing ?? false,
     bulk_min_price: product?.bulk_min_price?.toString() || '1000',
+    weight_grams: product?.weight_grams?.toString() || '',
+    flags: sanitizeFlags(product?.flags),
   })
+
+  // Berat per unit wajib untuk satuan hitungan (gram/kg/ons dihitung dari nilai satuan)
+  const needsWeight = ['pcs', 'ikat', 'pack'].includes(form.unit) && !form.is_bulk_pricing
+
+  const toggleFlag = (flag: ProductFlag, checked: boolean) =>
+    setForm((f) => ({
+      ...f,
+      flags: checked ? Array.from(new Set([...f.flags, flag])) : f.flags.filter((x) => x !== flag),
+    }))
 
   const handleNameChange = (name: string) => {
     setForm({
@@ -89,6 +102,8 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       preorder_days: form.is_preorder ? parseInt(form.preorder_days) : null,
       is_bulk_pricing: form.is_bulk_pricing,
       bulk_min_price: form.is_bulk_pricing ? parseInt(form.bulk_min_price) : null,
+      weight_grams: needsWeight ? parseInt(form.weight_grams) : null,
+      flags: form.flags,
     }
 
     try {
@@ -339,6 +354,47 @@ export function ProductForm({ product, categories }: ProductFormProps) {
             </p>
           </div>
         )}
+
+        {needsWeight && (
+          <div className="col-span-2">
+            <Label htmlFor="weight_grams">Berat per {form.unit} (gram)</Label>
+            <Input
+              id="weight_grams"
+              type="number"
+              min="1"
+              step="1"
+              value={form.weight_grams}
+              onChange={(e) => setForm({ ...form, weight_grams: e.target.value })}
+              placeholder="e.g., 250"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Dipakai untuk menghitung berat pesanan (pilihan kurir online). Berat tidak ditampilkan ke pembeli.
+            </p>
+          </div>
+        )}
+
+        <div className="col-span-2">
+          <Label>Penanda Produk</Label>
+          <p className="text-xs text-gray-500 mb-2">
+            Memengaruhi badge di katalog dan metode pengiriman yang tersedia.
+          </p>
+          <div className="space-y-2">
+            {PRODUCT_FLAG_KEYS.map((key) => (
+              <label key={key} className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={form.flags.includes(key)}
+                  onCheckedChange={(checked) => toggleFlag(key, checked === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-sm font-medium">{PRODUCT_FLAGS[key].label}</span>
+                  <span className="block text-xs text-gray-500">{PRODUCT_FLAGS[key].description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-3">

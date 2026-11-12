@@ -15,9 +15,11 @@ import {
   Menu,
   X,
   MessageSquare,
+  Settings,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { InternalCourierToggle } from '@/components/admin/InternalCourierToggle'
 import { useState } from 'react'
 
 interface SidebarProps {
@@ -41,7 +43,11 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const allMenuItems = isSuperAdmin
-    ? [...menuItems, { href: '/admin/admins', icon: Users, label: 'Admin' }]
+    ? [
+        ...menuItems,
+        { href: '/admin/settings/fulfillment', icon: Settings, label: 'Pengaturan Pengiriman' },
+        { href: '/admin/admins', icon: Users, label: 'Admin' },
+      ]
     : menuItems
 
   return (
@@ -106,6 +112,10 @@ export function Sidebar({ adminName, isSuperAdmin }: SidebarProps) {
             )
           })}
         </nav>
+
+        <div className="absolute bottom-[73px] left-0 right-0">
+          <InternalCourierToggle />
+        </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
           <div className="flex items-center gap-3 px-3 py-2">

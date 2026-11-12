@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
+import { ProductFlagBadges } from '@/components/user/ProductFlagBadges'
 import { Separator } from '@/components/ui/separator'
 import { formatPrice, formatUnit, getDiscountedPrice } from '@/lib/utils'
 import { AddToCartButton } from './add-to-cart-button'
@@ -86,6 +87,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <p className="text-gray-500 mt-1">
                 {formatUnit(product.unit, product.unit_value)}
               </p>
+              <ProductFlagBadges flags={product.flags} />
             </div>
 
             <div>
@@ -216,6 +218,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <p className="text-sm text-gray-500">
                 {formatUnit(product.unit, product.unit_value)}
               </p>
+              <ProductFlagBadges flags={product.flags} />
             </div>
             {reviews && reviews.length > 0 && (
               <div className="text-right">
