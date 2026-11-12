@@ -175,12 +175,17 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', inquiry.id)
 
-    // Send notification to admin (reuse existing notify endpoint)
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/orders/notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId: order.id }),
-    }).catch(console.error)
+    // Send notification to admin (reuse existing notify endpoint).
+    // Di-await: di serverless, kerja setelah response dikirim bisa terhenti (invarian I7).
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/orders/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id }),
+      })
+    } catch (notifyError) {
+      console.error('Order notify failed:', notifyError)
+    }
 
     return NextResponse.json({ orderId: order.id })
   } catch (error) {

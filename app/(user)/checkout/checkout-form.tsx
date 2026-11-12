@@ -14,7 +14,6 @@ import { DeliverySlotPicker } from '@/components/user/DeliverySlotPicker'
 import { CartItem, Address, Profile, DeliverySlot, PaymentMethod } from '@/types'
 import {
   formatPrice,
-  generateOrderNumber,
   calculateCartItemTotal,
   calculateBulkWeight,
   formatBulkWeight,
@@ -22,6 +21,8 @@ import {
   cn,
 } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { localDateString } from '@/lib/time'
+import { calculateTotal, calculateVoucherDiscount, checkVoucher, VOUCHER_ERROR_MESSAGES } from '@/lib/orders/pricing'
 import { useToast } from '@/hooks/use-toast'
 import { AddressDialog } from './address-dialog'
 
@@ -99,16 +100,10 @@ export function CheckoutForm({
     0
   )
 
-  const discount = appliedVoucher
-    ? appliedVoucher.type === 'percentage'
-      ? Math.min(
-          (subtotal * appliedVoucher.value) / 100,
-          appliedVoucher.max_discount || Infinity
-        )
-      : appliedVoucher.value
-    : 0
+  // Preview saja; server menghitung ulang diskon dan total saat order dibuat
+  const discount = calculateVoucherDiscount(subtotal, appliedVoucher)
 
-  const total = subtotal - discount
+  const total = calculateTotal(subtotal, discount)
 
   const handleApplyVoucher = async () => {
     if (!voucherCode.trim()) return
@@ -131,19 +126,11 @@ export function CheckoutForm({
       return
     }
 
-    if (voucher.min_purchase > subtotal) {
+    const voucherError = checkVoucher(voucher, subtotal)
+    if (voucherError) {
       toast({
-        title: 'Minimum pembelian tidak terpenuhi',
-        description: `Minimum pembelian ${formatPrice(voucher.min_purchase)}`,
-        variant: 'destructive',
-      })
-      return
-    }
-
-    if (voucher.usage_limit > 0 && voucher.used_count >= voucher.usage_limit) {
-      toast({
-        title: 'Voucher habis',
-        description: 'Kuota voucher sudah habis',
+        title: 'Voucher tidak dapat dipakai',
+        description: VOUCHER_ERROR_MESSAGES[voucherError],
         variant: 'destructive',
       })
       return
@@ -152,16 +139,8 @@ export function CheckoutForm({
     setAppliedVoucher(voucher)
     toast({
       title: 'Voucher berhasil diterapkan',
-      description: `Hemat ${formatPrice(discount)}`,
+      description: `Hemat ${formatPrice(calculateVoucherDiscount(subtotal, voucher))}`,
     })
-  }
-
-  const generatePaymentToken = () => {
-    return `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
-  }
-
-  const generateManagementToken = () => {
-    return `MGT-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
   }
 
   const handleSubmit = async () => {
@@ -201,103 +180,46 @@ export function CheckoutForm({
     setLoading(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Order dibuat di server (harga, diskon, voucher, slot divalidasi ulang di sana)
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          addressId: selectedAddress.id,
+          deliveryDate: localDateString(deliveryDate),
+          deliverySlot,
+          paymentMethod,
+          voucherCode: appliedVoucher?.code || null,
+          notes: notes || null,
+          ...(needsProfile ? { fullName, phone } : {}),
+        }),
+      })
 
-      if (!user) {
+      if (res.status === 401) {
         router.push('/login?redirect=/checkout')
         return
       }
 
-      if (needsProfile) {
-        await supabase
-          .from('profiles')
-          .update({ full_name: fullName, phone })
-          .eq('id', user.id)
-      }
+      const result = await res.json().catch(() => null)
 
-      const orderNumber = generateOrderNumber()
-
-      // Generate payment token for QRIS/Transfer
-      const paymentToken = paymentMethod !== 'cod' ? generatePaymentToken() : null
-
-      // Generate management token for admin order management
-      const managementToken = generateManagementToken()
-
-      // Set status based on payment method
-      // COD: processing (ready to be prepared)
-      // QRIS/Transfer: pending_payment (waiting for payment)
-      const orderStatus = paymentMethod === 'cod' ? 'processing' : 'pending_payment'
-
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          order_number: orderNumber,
-          status: orderStatus,
-          payment_method: paymentMethod,
-          payment_token: paymentToken,
-          management_token: managementToken,
-          subtotal,
-          discount,
-          voucher_id: appliedVoucher?.id,
-          total,
-          address_snapshot: {
-            label: selectedAddress.label,
-            address: selectedAddress.address,
-            province: selectedAddress.province || '',
-            city: selectedAddress.city,
-            district: selectedAddress.district,
-            village: selectedAddress.village || '',
-            postal_code: selectedAddress.postal_code,
-            notes: selectedAddress.notes,
-          },
-          delivery_date: deliveryDate.toISOString().split('T')[0],
-          delivery_slot: deliverySlot,
-          notes,
+      if (!res.ok || !result?.orderId) {
+        toast({
+          title: 'Gagal membuat pesanan',
+          description: result?.error?.message || 'Terjadi kesalahan, silakan coba lagi',
+          variant: 'destructive',
         })
-        .select()
-        .single()
-
-      if (orderError) throw orderError
-
-      const orderItems = cartItems.map((item) => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        product_snapshot: {
-          id: item.product?.id,
-          name: item.product?.name,
-          image_url: item.product?.image_url,
-          price: item.product?.price,
-          unit: item.product?.unit,
-          unit_value: item.product?.unit_value,
-          is_bulk_pricing: item.product?.is_bulk_pricing,
-        },
-        quantity: item.quantity,
-        price: item.product?.price || 0,
-        discount: 0,
-        subtotal: calculateCartItemTotal(item),
-      }))
-
-      await supabase.from('order_items').insert(orderItems)
-
-      if (appliedVoucher) {
-        await supabase
-          .from('vouchers')
-          .update({ used_count: appliedVoucher.used_count + 1 })
-          .eq('id', appliedVoucher.id)
+        return
       }
 
-      await supabase.from('cart_items').delete().eq('user_id', user.id)
-
-      // Send WhatsApp notifications to user and admin
+      // Kirim notifikasi WhatsApp ke user dan admin
       fetch('/api/orders/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id }),
+        body: JSON.stringify({ orderId: result.orderId }),
       }).catch(console.error)
 
       router.refresh()
-      router.push(`/payment/${order.id}`)
+      router.push(`/payment/${result.orderId}`)
     } catch (error) {
       console.error(error)
       toast({

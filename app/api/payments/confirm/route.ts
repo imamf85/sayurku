@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { transitionOrder } from '@/lib/orders/transition'
 import { formatPrice } from '@/lib/utils'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
@@ -107,35 +108,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update order status to paid then processing
-    const { error: updateError } = await adminSupabase
-      .from('orders')
-      .update({
-        status: 'processing',
-        paid_at: new Date().toISOString(),
-      })
-      .eq('id', order.id)
+    // Pembayaran terkonfirmasi: langsung diproses (guard pending_payment mencegah konfirmasi ganda)
+    const result = await transitionOrder(adminSupabase, order.id, {
+      to: 'processing',
+      expectFrom: 'pending_payment',
+      fields: { paid_at: new Date().toISOString() },
+      history: [
+        { status: 'paid', note: 'Pembayaran dikonfirmasi via link' },
+        { status: 'processing', note: 'Pesanan sedang diproses' },
+      ],
+    })
 
-    if (updateError) {
-      throw updateError
+    if (!result.applied) {
+      return NextResponse.json(
+        { error: 'Order already confirmed', status: result.from },
+        { status: 400 }
+      )
     }
-
-    // Add status history
-    await adminSupabase
-      .from('order_status_history')
-      .insert({
-        order_id: order.id,
-        status: 'paid',
-        note: 'Pembayaran dikonfirmasi via link',
-      })
-
-    await adminSupabase
-      .from('order_status_history')
-      .insert({
-        order_id: order.id,
-        status: 'processing',
-        note: 'Pesanan sedang diproses',
-      })
 
     // Get user profile to send notification
     const { data: profile } = await adminSupabase

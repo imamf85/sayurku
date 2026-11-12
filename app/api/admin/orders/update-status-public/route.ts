@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { transitionOrder } from '@/lib/orders/transition'
 import { formatPrice } from '@/lib/utils'
 import { OrderStatus } from '@/types'
 
@@ -86,24 +87,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update order status
-    const { error: updateError } = await adminSupabase
-      .from('orders')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', order.id)
-
-    if (updateError) {
-      throw updateError
-    }
-
-    // Add status history
-    await adminSupabase
-      .from('order_status_history')
-      .insert({
-        order_id: order.id,
-        status,
-        note: `Status diupdate via management link`,
-      })
+    // Ubah status + catat riwayat lewat satu pintu (I9)
+    await transitionOrder(adminSupabase, order.id, {
+      to: status,
+      note: 'Status diupdate via management link',
+    })
 
     // Get customer info to send notification
     const { data: profile } = await adminSupabase

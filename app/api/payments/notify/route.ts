@@ -31,6 +31,16 @@ Klik link berikut untuk konfirmasi:
 ${confirmUrl}`
 }
 
+// Bukti bayar harus berupa file di bucket publik `orders` milik project Supabase ini,
+// dengan nama yang memuat id order (lihat PaymentProofUpload).
+function isValidPaymentProofUrl(url: unknown, orderId: string): boolean {
+  if (typeof url !== 'string') return false
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) return false
+  const prefix = `${base}/storage/v1/object/public/orders/payment-proofs/${orderId}-`
+  return url.startsWith(prefix) && !url.includes('..')
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient()
@@ -44,7 +54,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { orderId } = await request.json()
+    const { orderId, paymentProofUrl } = await request.json()
 
     if (!orderId) {
       return NextResponse.json(
@@ -68,6 +78,31 @@ export async function POST(request: NextRequest) {
         { error: 'Order not found' },
         { status: 404 }
       )
+    }
+
+    // Simpan bukti bayar di server (browser tidak boleh menulis ke tabel orders, invarian I10)
+    if (paymentProofUrl !== undefined) {
+      if (order.status !== 'pending_payment') {
+        return NextResponse.json(
+          { error: 'Order tidak lagi menunggu pembayaran' },
+          { status: 400 }
+        )
+      }
+
+      if (!isValidPaymentProofUrl(paymentProofUrl, order.id)) {
+        return NextResponse.json(
+          { error: 'URL bukti pembayaran tidak valid' },
+          { status: 400 }
+        )
+      }
+
+      const { error: proofError } = await adminSupabase
+        .from('orders')
+        .update({ payment_proof_url: paymentProofUrl })
+        .eq('id', order.id)
+        .eq('user_id', user.id)
+
+      if (proofError) throw proofError
     }
 
     if (!order.payment_token) {

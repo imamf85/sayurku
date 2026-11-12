@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { Unit, PromoType, Product, Promo, DeliverySlot, CartItem } from '@/types'
+import { jakartaDateString, jakartaMinutesOfDay, timeToMinutes } from '@/lib/time'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -53,10 +54,16 @@ export function getDiscountedPrice(product: Product, promo?: Promo | null): numb
   return Math.max(0, product.price - discount)
 }
 
+/**
+ * Nomor order: ORD-YYYYMMDD(Jakarta)-XXXXXX.
+ * Dipakai oleh jalur order di luar RPC create_order (mis. inquiries/checkout).
+ * Checkout utama membuat nomor di dalam RPC (database).
+ */
 export function generateOrderNumber(): string {
-  const date = new Date()
-  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '')
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase()
+  const dateStr = jakartaDateString().replace(/-/g, '')
+  const bytes = new Uint8Array(3)
+  globalThis.crypto.getRandomValues(bytes)
+  const random = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
   return `ORD-${dateStr}-${random}`
 }
 
@@ -90,7 +97,8 @@ export function formatDateTime(date: string | Date): string {
 export function getAvailableDeliverySlots(
   slots: DeliverySlot[],
   isForToday: boolean = true,
-  isPreorder: boolean = false
+  isPreorder: boolean = false,
+  now: Date = new Date()
 ): DeliverySlot[] {
   // For preorder, return all slots except instant for future dates
   if (isPreorder) {
@@ -102,9 +110,8 @@ export function getAvailableDeliverySlots(
     return slots.filter((slot) => slot.slot_type === 'scheduled')
   }
 
-  // For today, filter based on current time
-  const now = new Date()
-  const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000)
+  // For today, filter based on current time (waktu Jakarta, bukan zona waktu server/browser)
+  const nowMinutes = jakartaMinutesOfDay(now)
 
   return slots.filter((slot) => {
     // Instant delivery is only available for today
@@ -114,12 +121,8 @@ export function getAvailableDeliverySlots(
 
     if (!slot.time_start) return false
 
-    const [hours, minutes] = slot.time_start.split(':').map(Number)
-    const slotStart = new Date(now)
-    slotStart.setHours(hours, minutes, 0, 0)
-
     // Slot must be at least 1 hour from now
-    return oneHourLater < slotStart
+    return nowMinutes + 60 < timeToMinutes(slot.time_start)
   })
 }
 
@@ -129,8 +132,8 @@ export function getAvailableDeliverySlots(
  * @param slots - All delivery slots
  * @returns True if today has at least one available slot
  */
-export function isTodayDeliveryAvailable(slots: DeliverySlot[]): boolean {
-  const availableSlots = getAvailableDeliverySlots(slots, true, false)
+export function isTodayDeliveryAvailable(slots: DeliverySlot[], now: Date = new Date()): boolean {
+  const availableSlots = getAvailableDeliverySlots(slots, true, false, now)
   return availableSlots.length > 0
 }
 

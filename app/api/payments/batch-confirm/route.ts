@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { transitionOrder } from '@/lib/orders/transition'
 import { formatPrice } from '@/lib/utils'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
@@ -76,36 +77,20 @@ export async function POST(request: NextRequest) {
       throw updateBatchError
     }
 
-    // Update all orders to processing
-    const { error: updateOrdersError } = await adminSupabase
-      .from('orders')
-      .update({
-        status: 'processing',
-        paid_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+    // Semua order dalam batch → processing lewat satu pintu (I9).
+    // Guard pending_payment: order yang sudah dibayar/dibatalkan tidak ditimpa.
+    const paidAt = new Date().toISOString()
+    for (const orderId of batchPayment.order_ids as string[]) {
+      await transitionOrder(adminSupabase, orderId, {
+        to: 'processing',
+        expectFrom: 'pending_payment',
+        fields: { paid_at: paidAt },
+        history: [
+          { status: 'paid', note: 'Pembayaran batch dikonfirmasi via link' },
+          { status: 'processing', note: 'Pesanan sedang diproses' },
+        ],
       })
-      .in('id', batchPayment.order_ids)
-
-    if (updateOrdersError) {
-      throw updateOrdersError
     }
-
-    // Add status history for each order
-    const statusHistoryRecords = batchPayment.order_ids.map((orderId: string) => ({
-      order_id: orderId,
-      status: 'paid',
-      note: 'Pembayaran batch dikonfirmasi via link',
-    }))
-
-    await adminSupabase.from('order_status_history').insert(statusHistoryRecords)
-
-    const processingHistoryRecords = batchPayment.order_ids.map((orderId: string) => ({
-      order_id: orderId,
-      status: 'processing',
-      note: 'Pesanan sedang diproses',
-    }))
-
-    await adminSupabase.from('order_status_history').insert(processingHistoryRecords)
 
     // Get order numbers for notification
     const { data: orders } = await adminSupabase

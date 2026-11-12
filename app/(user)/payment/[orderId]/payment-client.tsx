@@ -10,7 +10,6 @@ import { PaymentProofUpload } from '@/components/user/PaymentProofUpload'
 import { PaymentStatus } from '@/components/user/PaymentStatus'
 import { Order } from '@/types'
 import { formatPrice, formatDateTime } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 
 interface PaymentClientProps {
@@ -40,7 +39,6 @@ export function PaymentClient({ order }: PaymentClientProps) {
   const [submitted, setSubmitted] = useState(order.status !== 'pending_payment' || !!order.payment_proof_url)
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null)
   const { toast } = useToast()
-  const supabase = createClient()
 
   const handleCopyAccount = async (accountNumber: string) => {
     await navigator.clipboard.writeText(accountNumber)
@@ -92,20 +90,14 @@ export function PaymentClient({ order }: PaymentClientProps) {
     setSubmitting(true)
 
     try {
-      // Update order with payment proof
-      const { error } = await supabase
-        .from('orders')
-        .update({ payment_proof_url: paymentProofUrl })
-        .eq('id', order.id)
-
-      if (error) throw error
-
-      // Notify admin via API
-      await fetch('/api/payments/notify', {
+      // Simpan bukti bayar + notifikasi admin (dilakukan di server)
+      const res = await fetch('/api/payments/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id }),
+        body: JSON.stringify({ orderId: order.id, paymentProofUrl }),
       })
+
+      if (!res.ok) throw new Error('Gagal menyimpan bukti pembayaran')
 
       setSubmitted(true)
       toast({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { transitionOrder } from '@/lib/orders/transition'
 import { formatPrice, getStatusLabel } from '@/lib/utils'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
@@ -59,37 +60,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Build update object for orders table
-    const orderUpdate: Record<string, any> = { status }
-
+    // Kolom tambahan saat pesanan diterima
+    const fields: Record<string, unknown> = {}
     if (status === 'delivered') {
-      if (receivedBy) orderUpdate.received_by = receivedBy
-      if (deliveryProofUrl) orderUpdate.delivery_proof_url = deliveryProofUrl
+      if (receivedBy) fields.received_by = receivedBy
+      if (deliveryProofUrl) fields.delivery_proof_url = deliveryProofUrl
     }
 
-    // Update order status
-    const { error: updateError } = await adminClient
-      .from('orders')
-      .update(orderUpdate)
-      .eq('id', orderId)
-
-    if (updateError) {
+    // Ubah status + catat riwayat lewat satu pintu (I9)
+    try {
+      await transitionOrder(adminClient, orderId, {
+        to: status,
+        note: note || null,
+        actorId: admin.id,
+        fields,
+      })
+    } catch (updateError: any) {
       console.error('Update order error:', updateError)
       return NextResponse.json(
         { error: updateError.message },
         { status: 500 }
       )
     }
-
-    // Insert status history
-    await adminClient
-      .from('order_status_history')
-      .insert({
-        order_id: orderId,
-        status,
-        note: note || null,
-        created_by: admin.id,
-      })
 
     // Send WhatsApp notification to user if status changed
     if (order.status !== status) {

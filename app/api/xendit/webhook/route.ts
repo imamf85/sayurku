@@ -7,6 +7,7 @@ import {
   formatAdminNewOrderMessage,
 } from '@/lib/whatsapp'
 import { formatDate } from '@/lib/utils'
+import { transitionOrder } from '@/lib/orders/transition'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,14 +39,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    await supabase
-      .from('orders')
-      .update({
-        status: 'paid',
+    // Guard pending_payment: webhook yang terkirim ulang tidak memproses order dua kali
+    const result = await transitionOrder(supabase, order.id, {
+      to: 'paid',
+      expectFrom: 'pending_payment',
+      note: 'Pembayaran dikonfirmasi via Xendit',
+      fields: {
         payment_method: payload.payment_method,
         paid_at: new Date().toISOString(),
-      })
-      .eq('id', order.id)
+      },
+    })
+
+    if (!result.applied) {
+      return NextResponse.json({ received: true })
+    }
 
     const { data: slot } = await supabase
       .from('delivery_slots')
