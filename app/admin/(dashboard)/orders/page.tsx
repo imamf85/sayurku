@@ -4,13 +4,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { OrderTable } from '@/components/admin/OrderTable'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AutoRefresh } from '@/components/admin/AutoRefresh'
 
 export default async function OrdersPage() {
   const supabase = createAdminClient()
 
   const { data: orders } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, shipments(is_active, status)')
     .order('created_at', { ascending: false })
 
   const allOrders = orders || []
@@ -21,12 +22,29 @@ export default async function OrdersPage() {
   const shippingOrders = allOrders.filter((o) => o.status === 'shipping')
   const deliveredOrders = allOrders.filter((o) => o.status === 'delivered')
 
+  // Antrean Grab: sudah dibayar (paid_at, BUKAN status 'paid': konfirmasi manual langsung 'processing')
+  // tetapi belum ada pengiriman aktif. Driver datang ±1 jam setelah dipanggil, jadi urutkan dari yang terlama.
+  const needGrabOrders = allOrders
+    .filter(
+      (o) =>
+        o.fulfillment_method === 'grab' &&
+        o.paid_at &&
+        !['delivered', 'cancelled'].includes(o.status) &&
+        !(o.shipments || []).some((s: { is_active: boolean }) => s.is_active)
+    )
+    .sort((a, b) => new Date(a.paid_at).getTime() - new Date(b.paid_at).getTime())
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Pesanan</h1>
 
-      <Tabs defaultValue="all">
+      {needGrabOrders.length > 0 && <AutoRefresh seconds={30} />}
+
+      <Tabs defaultValue={needGrabOrders.length > 0 ? 'needgrab' : 'all'}>
         <TabsList className="flex-wrap">
+          <TabsTrigger value="needgrab" className={needGrabOrders.length > 0 ? 'text-red-600 font-semibold' : ''}>
+            Perlu Panggil Grab ({needGrabOrders.length})
+          </TabsTrigger>
           <TabsTrigger value="all">Semua ({allOrders.length})</TabsTrigger>
           <TabsTrigger value="pending">
             Menunggu Bayar ({pendingOrders.length})
@@ -45,6 +63,23 @@ export default async function OrdersPage() {
             Diterima ({deliveredOrders.length})
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="needgrab">
+          <Card>
+            <CardContent className="pt-6">
+              {needGrabOrders.length > 0 ? (
+                <>
+                  <p className="text-sm text-red-600 mb-3">
+                    Driver datang ±1 jam setelah dipanggil. Panggil Grab sekarang, lalu packing sambil menunggu.
+                  </p>
+                  <OrderTable orders={needGrabOrders} />
+                </>
+              ) : (
+                <p className="text-center py-8 text-gray-500">Tidak ada pesanan Grab yang menunggu dipanggil</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="all">
           <Card>

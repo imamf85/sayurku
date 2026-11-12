@@ -155,6 +155,8 @@ export interface AddressSnapshot {
   postal_code: string
   notes: string | null
   is_pickup?: boolean
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface ProductSnapshot {

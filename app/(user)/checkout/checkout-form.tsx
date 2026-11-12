@@ -106,7 +106,7 @@ export function CheckoutForm({
     [cartItems]
   )
   const hasPickupOnlyItem = cartFlags.includes('pickup_only')
-  const [method, setMethod] = useState<'internal' | 'pickup'>(hasPickupOnlyItem ? 'pickup' : 'internal')
+  const [method, setMethod] = useState<'internal' | 'grab' | 'pickup'>(hasPickupOnlyItem ? 'pickup' : 'internal')
 
   const weightGrams = useMemo(
     () => cartWeightGrams(cartItems.map((i) => ({ quantity: i.quantity, product: i.product! })), settings),
@@ -116,13 +116,35 @@ export function CheckoutForm({
   const hasPin = selectedAddress?.latitude != null && selectedAddress?.longitude != null
   const distanceKm = useMemo(
     () =>
-      method === 'internal' && selectedAddress && hasPin
+      method !== 'pickup' && selectedAddress && hasPin
         ? haversineKm(
             { latitude: settings.store_latitude, longitude: settings.store_longitude },
             { latitude: selectedAddress.latitude!, longitude: selectedAddress.longitude! }
           )
         : null,
     [method, selectedAddress, hasPin, settings.store_latitude, settings.store_longitude]
+  )
+
+  // Ongkir GrabExpress: hanya dihitung bila customer memilih Grab (hemat kuota Rates)
+  const cartKey = cartItems.map((i) => `${i.product_id}:${i.quantity}`).join('|')
+  const grabKey =
+    method === 'grab' && selectedAddress?.id && hasPin ? (['grab-quote', selectedAddress.id, cartKey] as const) : null
+  const {
+    data: grabQuote,
+    isLoading: grabLoading,
+    mutate: refreshGrabQuote,
+  } = useSWR<{ available: boolean; quoteId?: string; fee?: number; durationText?: string | null; reason?: ReasonCode; message?: string }>(
+    grabKey,
+    async ([, addressId]: readonly [string, string, string]) => {
+      const res = await fetch('/api/checkout/grab-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addressId }),
+      })
+      const json = await res.json().catch(() => null)
+      return json?.available !== undefined ? json : { available: false, reason: 'GRAB_UNAVAILABLE' as ReasonCode }
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
   )
 
   // Beban kurir internal per slot (hanya bila ada slot berkapasitas); hanya untuk tampilan
@@ -134,10 +156,10 @@ export function CheckoutForm({
     { revalidateOnFocus: false }
   )
 
-  const baseCtx = (slot: DeliverySlot, m: 'internal' | 'pickup'): { m: typeof m; ctx: EligibilityContext } => ({
+  const baseCtx = (slot: DeliverySlot, m: 'internal' | 'grab' | 'pickup'): { m: typeof m; ctx: EligibilityContext } => ({
     m,
     ctx: {
-      distanceKm: m === 'internal' ? distanceKm : null,
+      distanceKm: m === 'pickup' ? null : distanceKm,
       cartFlags,
       cartWeightGrams: weightGrams,
       hasPreorder,
@@ -145,8 +167,19 @@ export function CheckoutForm({
       now: new Date(),
       settings,
       internalLoad: loadData?.loads?.[slot.id] ?? 0,
+      grabQuoteAvailable: m === 'grab' && grabQuote ? grabQuote.available : undefined,
     },
   })
+
+  // Ingat Grab yang tidak tersedia untuk kombinasi alamat+keranjang ini, agar kartunya tetap
+  // nonaktif (dengan alasan) setelah customer otomatis dipindah ke metode lain
+  const currentGrabKey = `${selectedAddress?.id ?? ''}|${cartKey}`
+  const [grabBlocked, setGrabBlocked] = useState<{ key: string; reason: ReasonCode } | null>(null)
+  useEffect(() => {
+    if (grabQuote && !grabQuote.available) {
+      setGrabBlocked({ key: currentGrabKey, reason: grabQuote.reason ?? 'GRAB_UNAVAILABLE' })
+    }
+  }, [grabQuote, currentGrabKey])
 
   // Alasan per slot untuk metode terpilih → slot nonaktif + keterangan
   const slotReasons = useMemo(() => {
@@ -158,7 +191,7 @@ export function CheckoutForm({
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverySlots, method, distanceKm, cartFlags, weightGrams, hasPreorder, settings, loadData, deliveryDate])
+  }, [deliverySlots, method, distanceKm, cartFlags, weightGrams, hasPreorder, settings, loadData, deliveryDate, grabQuote])
 
   // Alasan level-metode (bukan per slot) untuk kartu pilihan
   const methodReasons = useMemo(() => {
@@ -166,30 +199,45 @@ export function CheckoutForm({
       id: 'probe', name: '', slot_type: 'scheduled', time_start: null, time_end: null,
       is_active: true, sort_order: 0, applies_to: 'both', internal_capacity: null,
     }
-    const reasonFor = (m: 'internal' | 'pickup'): ReasonCode | null => {
-      const { ctx } = baseCtx(probe, m)
-      // internal: bila belum ada pin, jarak belum diketahui → tidak diblokir di level kartu (ada prompt pin)
-      const withDistance = m === 'internal' && !hasPin ? { ...ctx, distanceKm: settings.internal_min_km } : ctx
+    const reasonFor = (m: 'internal' | 'grab' | 'pickup'): ReasonCode | null => {
+      // Grab selalu 'asap' (slot instan); internal/pickup diuji dengan slot terjadwal generik
+      const { ctx } = baseCtx(m === 'grab' ? { ...probe, slot_type: 'instant' } : probe, m)
+      // Belum ada pin: jarak belum diketahui → tidak diblokir di level kartu (ada prompt pin)
+      const withDistance = m !== 'pickup' && !hasPin ? { ...ctx, distanceKm: settings.internal_min_km } : ctx
       const r = eligible(m, withDistance)
       return r.ok ? null : r.reason
     }
-    return { internal: reasonFor('internal'), pickup: reasonFor('pickup') }
+    const grabReason =
+      reasonFor('grab') ?? (grabBlocked && grabBlocked.key === currentGrabKey ? grabBlocked.reason : null)
+    return { internal: reasonFor('internal'), grab: grabReason, pickup: reasonFor('pickup') }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceKm, hasPin, cartFlags, settings])
+  }, [distanceKm, hasPin, cartFlags, settings, grabBlocked, currentGrabKey])
 
   // Bila pilihan saat ini jadi tidak valid, pindah ke metode lain yang tersedia
   useEffect(() => {
-    if (methodReasons[method] && !methodReasons[method === 'internal' ? 'pickup' : 'internal']) {
-      setMethod(method === 'internal' ? 'pickup' : 'internal')
+    if (methodReasons[method]) {
+      const alt = (['internal', 'grab', 'pickup'] as const).find((m) => m !== method && !methodReasons[m])
+      if (alt) setMethod(alt)
     }
   }, [methodReasons, method])
+
+  // Pilih metode: Grab hanya "secepatnya", jadi arahkan ke hari ini + slot instan
+  const instantSlot = deliverySlots.find((sl) => sl.slot_type === 'instant')
+  const handleMethodChange = (m: 'internal' | 'grab' | 'pickup') => {
+    setMethod(m)
+    if (m === 'grab' && instantSlot && !hasPreorder) {
+      setDeliveryDate(new Date())
+      setDeliverySlot(instantSlot.id)
+    }
+  }
 
   const allowedPayments = allowedPaymentMethods(method)
   useEffect(() => {
     if (!allowedPayments.includes(paymentMethod)) setPaymentMethod(allowedPayments[0])
   }, [allowedPayments, paymentMethod])
 
-  const shippingFee = method === 'internal' ? settings.internal_fee : 0
+  const grabFee = method === 'grab' && grabQuote?.available ? grabQuote.fee ?? 0 : 0
+  const shippingFee = method === 'grab' ? grabFee : method === 'internal' ? settings.internal_fee : 0
 
   const [fullName, setFullName] = useState(profile?.full_name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
@@ -245,7 +293,7 @@ export function CheckoutForm({
   }
 
   const handleSubmit = async () => {
-    if (method === 'internal') {
+    if (method !== 'pickup') {
       if (!selectedAddress) {
         toast({
           title: 'Pilih alamat pengiriman',
@@ -261,6 +309,15 @@ export function CheckoutForm({
         })
         return
       }
+    }
+
+    if (method === 'grab' && (!grabQuote?.available || !grabQuote.quoteId)) {
+      toast({
+        title: 'Ongkir GrabExpress belum tersedia',
+        description: grabLoading ? 'Tunggu perhitungan ongkir selesai' : 'Pilih cara terima pesanan lain',
+        variant: 'destructive',
+      })
+      return
     }
 
     if (methodReasons[method]) {
@@ -315,7 +372,8 @@ export function CheckoutForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fulfillmentMethod: method,
-          addressId: method === 'internal' ? selectedAddress?.id : null,
+          addressId: method !== 'pickup' ? selectedAddress?.id : null,
+          quoteId: method === 'grab' ? grabQuote?.quoteId : null,
           deliveryDate: localDateString(deliveryDate),
           deliverySlot,
           paymentMethod,
@@ -335,6 +393,7 @@ export function CheckoutForm({
       if (!res.ok || !result?.orderId) {
         // Slot bisa penuh karena checkout lain: segarkan beban slot
         if (result?.error?.code === 'SLOT_FULL') refreshLoads()
+        if (result?.error?.code === 'QUOTE_EXPIRED') refreshGrabQuote()
         toast({
           title: 'Gagal membuat pesanan',
           description: result?.error?.message || 'Terjadi kesalahan, silakan coba lagi',
@@ -396,9 +455,10 @@ export function CheckoutForm({
 
       <FulfillmentSection
         method={method}
-        onChange={setMethod}
+        onChange={handleMethodChange}
         reasons={methodReasons}
         internalFee={settings.internal_fee}
+        grab={{ loading: grabLoading, fee: grabQuote?.available ? grabQuote.fee : undefined, durationText: grabQuote?.durationText }}
       />
 
       {method === 'pickup' && (
@@ -412,7 +472,7 @@ export function CheckoutForm({
         </section>
       )}
 
-      {method === 'internal' && (
+      {method !== 'pickup' && (
       <section className="bg-white rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium">Alamat Pengiriman</h2>
@@ -583,10 +643,12 @@ export function CheckoutForm({
               <span>-{formatPrice(discount)}</span>
             </div>
           )}
-          {method === 'internal' && (
+          {method !== 'pickup' && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Ongkos kirim</span>
-              <span>{shippingFee > 0 ? formatPrice(shippingFee) : 'Gratis'}</span>
+              <span>
+                {method === 'grab' && grabLoading ? 'Menghitung...' : shippingFee > 0 ? formatPrice(shippingFee) : 'Gratis'}
+              </span>
             </div>
           )}
           <div className="flex justify-between font-bold">

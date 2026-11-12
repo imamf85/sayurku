@@ -115,7 +115,7 @@ describe('eligible: grab', () => {
 })
 
 describe('allowedPaymentMethods', () => {
-  it('grab tanpa COD', () => expect(allowedPaymentMethods('grab')).toEqual(['qris', 'transfer']))
+  it('grab hanya QRIS', () => expect(allowedPaymentMethods('grab')).toEqual(['qris']))
   it('internal & pickup boleh COD', () => {
     expect(allowedPaymentMethods('internal')).toContain('cod')
     expect(allowedPaymentMethods('pickup')).toContain('cod')

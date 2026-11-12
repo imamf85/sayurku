@@ -20,6 +20,10 @@ const NUM_FIELDS = [
   'packaging_grams',
   'default_item_grams',
   'payment_hold_minutes',
+  'grab_bike_max_grams',
+  'grab_car_max_grams',
+  'grab_fee_markup',
+  'grab_fee_rounding',
 ] as const
 type NumField = (typeof NUM_FIELDS)[number]
 
@@ -217,6 +221,38 @@ export default function FulfillmentSettingsPage() {
             <Field label="Jam kerja kurir (selesai)">
               <Input type="time" value={settings.internal_hours_end} disabled={!canEdit} onChange={(e) => set('internal_hours_end', e.target.value)} />
             </Field>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">GrabExpress (kurir online via Biteship)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Aktifkan GrabExpress</Label>
+              <p className="text-xs text-gray-500">
+                Butuh BITESHIP_API_KEY di server. Hanya untuk pengiriman secepatnya, pembayaran QRIS, semua jarak.
+              </p>
+            </div>
+            <Switch checked={settings.grab_enabled} disabled={!canEdit} onCheckedChange={(v) => set('grab_enabled', v)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {num('grab_bike_max_grams', 'Batas berat motor (gram)', 'Di atasnya memakai mobil. Grab Instant: 20.000')}
+            {num('grab_car_max_grams', 'Batas berat mobil (gram)', 'Di atasnya Grab tidak tersedia. Instant Car: 150.000')}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {num('grab_fee_markup', 'Tambahan ongkir (Rp)', 'Penyangga bila harga Grab naik antara checkout dan pemanggilan')}
+            {num('grab_fee_rounding', 'Pembulatan ongkir (Rp)', 'Dibulatkan ke atas, mis. 500')}
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Asuransi pengiriman (0,5%)</Label>
+              <p className="text-xs text-gray-500">Biasanya tidak perlu untuk belanja sayur bernilai kecil.</p>
+            </div>
+            <Switch checked={settings.grab_insurance} disabled={!canEdit} onCheckedChange={(v) => set('grab_insurance', v)} />
           </div>
         </CardContent>
       </Card>

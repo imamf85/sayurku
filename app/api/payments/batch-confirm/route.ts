@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { transitionOrder } from '@/lib/orders/transition'
+import { onOrderPaid } from '@/lib/orders/on-paid'
 import { formatPrice } from '@/lib/utils'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     // Guard pending_payment: order yang sudah dibayar/dibatalkan tidak ditimpa.
     const paidAt = new Date().toISOString()
     for (const orderId of batchPayment.order_ids as string[]) {
-      await transitionOrder(adminSupabase, orderId, {
+      const result = await transitionOrder(adminSupabase, orderId, {
         to: 'processing',
         expectFrom: 'pending_payment',
         fields: { paid_at: paidAt },
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
           { status: 'processing', note: 'Pesanan sedang diproses' },
         ],
       })
+      if (result.applied) await onOrderPaid(adminSupabase, orderId)
     }
 
     // Get order numbers for notification

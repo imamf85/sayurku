@@ -17,6 +17,7 @@ import {
 } from '@/lib/utils'
 import { UpdateOrderStatus } from './update-status'
 import { PickupHandover } from './pickup-handover'
+import { ShipmentCard } from './shipment-card'
 import { FULFILLMENT_LABELS, statusLabelFor } from '@/lib/fulfillment/labels'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
@@ -51,6 +52,15 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     .order('created_at', { ascending: false })
 
   const pickup = order.fulfillment_method === 'pickup'
+  const grab = order.fulfillment_method === 'grab'
+
+  const { data: shipments } = grab
+    ? await supabase
+        .from('shipments')
+        .select('id, attempt, status, is_active, courier_service, fee_charged, price_booked, price_final, driver_name, driver_phone, driver_plate, tracking_link, failure_reason, created_at')
+        .eq('order_id', params.id)
+        .order('attempt', { ascending: false })
+    : { data: [] }
 
   const trackingUrl = order.tracking_token
     ? `${APP_URL}/track/${order.tracking_token}`
@@ -344,6 +354,23 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           )}
         </CardContent>
       </Card>
+
+      {grab && (
+        <Card className="border-green-200">
+          <CardHeader>
+            <CardTitle>Pengiriman GrabExpress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ShipmentCard
+              orderId={order.id}
+              orderStatus={order.status}
+              paid={!!order.paid_at}
+              feeCharged={order.shipping_fee}
+              shipments={shipments || []}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {pickup && (
         <Card>

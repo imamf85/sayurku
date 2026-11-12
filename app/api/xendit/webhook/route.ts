@@ -8,6 +8,7 @@ import {
 } from '@/lib/whatsapp'
 import { formatDate } from '@/lib/utils'
 import { transitionOrder } from '@/lib/orders/transition'
+import { onOrderPaid } from '@/lib/orders/on-paid'
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +54,8 @@ export async function POST(request: NextRequest) {
     if (!result.applied) {
       return NextResponse.json({ received: true })
     }
+
+    await onOrderPaid(supabase, order.id)
 
     const { data: slot } = await supabase
       .from('delivery_slots')

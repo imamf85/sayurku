@@ -19,6 +19,7 @@ import {
 import { formatDate, formatDateTime, formatPrice } from '@/lib/utils'
 import { PickupInfoCard } from '@/components/user/PickupInfoCard'
 import { getSettingsCached } from '@/lib/settings'
+import { GrabShipmentCard } from '@/components/user/GrabShipmentCard'
 import { progressSteps, statusLabelFor } from '@/lib/fulfillment/labels'
 
 interface TrackingPageProps {
@@ -78,6 +79,15 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
   const pickup = order.fulfillment_method === 'pickup'
   const statusOrder = progressSteps(order.fulfillment_method)
   const store = pickup ? await getSettingsCached() : null
+  const { data: shipment } =
+    order.fulfillment_method === 'grab'
+      ? await supabase
+          .from('shipments')
+          .select('status, driver_name, driver_phone, driver_plate, driver_photo_url, tracking_link')
+          .eq('order_id', order.id)
+          .eq('is_active', true)
+          .maybeSingle()
+      : { data: null }
 
   // Get current status index for progress indicator
   const currentStatusIndex = statusOrder.indexOf(order.status)
@@ -174,6 +184,8 @@ export default async function TrackingPage({ params }: TrackingPageProps) {
             </div>
           </div>
         )}
+
+        {shipment && <GrabShipmentCard shipment={shipment} />}
 
         {pickup && store && (
           <PickupInfoCard

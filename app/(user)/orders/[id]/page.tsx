@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/separator'
 import { MapPin, CheckCircle2, Package, Truck, Home, Store } from 'lucide-react'
 import { PickupInfoCard } from '@/components/user/PickupInfoCard'
 import { getSettingsCached } from '@/lib/settings'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { GrabShipmentCard } from '@/components/user/GrabShipmentCard'
 import { FULFILLMENT_LABELS, progressSteps, statusLabelFor } from '@/lib/fulfillment/labels'
 import {
   formatPrice,
@@ -57,6 +59,18 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
   const pickup = order.fulfillment_method === 'pickup'
   const statusOrder = progressSteps(order.fulfillment_method)
   const store = pickup ? await getSettingsCached() : null
+
+  // Info kurir Grab (kepemilikan order sudah diverifikasi di atas). shipments tanpa RLS user,
+  // jadi dibaca lewat service role dengan kolom aman saja (tanpa harga).
+  const { data: shipment } =
+    order.fulfillment_method === 'grab'
+      ? await createAdminClient()
+          .from('shipments')
+          .select('status, driver_name, driver_phone, driver_plate, driver_photo_url, tracking_link')
+          .eq('order_id', order.id)
+          .eq('is_active', true)
+          .maybeSingle()
+      : { data: null }
   const canTrack = ['processing', 'ready_for_pickup', 'shipping'].includes(order.status)
   const currentStatusIndex = statusOrder.indexOf(order.status)
   const isCancelled = order.status === 'cancelled'
@@ -154,6 +168,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           )}
         </div>
       </div>
+
+      {shipment && <GrabShipmentCard shipment={shipment} />}
 
       {pickup && store ? (
         <PickupInfoCard

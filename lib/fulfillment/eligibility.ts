@@ -90,7 +90,11 @@ export function eligible(method: FulfillmentMethod, ctx: EligibilityContext): El
   return ok
 }
 
-/** Aturan pembayaran per metode (dokumen §5.3). COD tidak boleh untuk Grab. */
+/**
+ * Aturan pembayaran per metode (dokumen §5.3, §14 poin 4). Grab: hanya QRIS, karena konfirmasi
+ * otomatis lewat Xendit; transfer manual bisa tertunda berjam-jam sehingga "instan" tidak lagi instan
+ * dan harga quote kedaluwarsa. COD tidak pernah untuk Grab.
+ */
 export function allowedPaymentMethods(method: FulfillmentMethod): Array<'qris' | 'transfer' | 'cod'> {
-  return method === 'grab' ? ['qris', 'transfer'] : ['qris', 'transfer', 'cod']
+  return method === 'grab' ? ['qris'] : ['qris', 'transfer', 'cod']
 }

@@ -12,6 +12,7 @@ export type ReasonCode =
   | 'ITEM_NOT_ALLOWED'
   | 'TOO_HEAVY'
   | 'NO_COURIER'
+  | 'GRAB_UNAVAILABLE'
   | 'PICKUP_OFF'
   | 'STORE_CLOSED'
 
@@ -29,6 +30,7 @@ export const REASON_MESSAGES: Record<ReasonCode, string> = {
   ITEM_NOT_ALLOWED: 'Ada produk yang tidak bisa dikirim lewat kurir online',
   TOO_HEAVY: 'Pesanan terlalu berat untuk kurir online',
   NO_COURIER: 'Belum ada kurir yang melayani alamat ini',
+  GRAB_UNAVAILABLE: 'Kurir online sedang bermasalah, coba lagi sebentar',
   PICKUP_OFF: 'Ambil di toko sedang tidak tersedia',
   STORE_CLOSED: 'Toko sedang tutup, pilih jadwal lain',
 }

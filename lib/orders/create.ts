@@ -10,6 +10,7 @@ import { cartWeightGrams } from '@/lib/fulfillment/weight'
 import { allowedPaymentMethods, eligible, timingOf } from '@/lib/fulfillment/eligibility'
 import { REASON_MESSAGES } from '@/lib/fulfillment/reasons'
 import { getInternalLoads } from '@/lib/fulfillment/slot-load'
+import { loadValidQuote } from '@/lib/fulfillment/quote'
 import {
   calculateTotal,
   calculateVoucherDiscount,
@@ -20,8 +21,9 @@ import { validateSchedule, SCHEDULE_ERROR_MESSAGES } from '@/lib/orders/schedule
 import type { CartItem, DeliverySlot } from '@/types'
 
 export const createOrderSchema = z.object({
-  // Grab (kurir online) belum tersedia di Fase 2; ditambahkan di Fase 3
-  fulfillmentMethod: z.enum(['internal', 'pickup']).default('internal'),
+  fulfillmentMethod: z.enum(['internal', 'grab', 'pickup']).default('internal'),
+  // Wajib untuk grab: id quote dari POST /api/checkout/grab-quote
+  quoteId: z.string().uuid().optional().nullable(),
   // Wajib bila diantar; diabaikan untuk ambil di toko
   addressId: z.string().uuid().optional().nullable(),
   deliveryDate: z.string().refine(isValidDateString, 'Tanggal tidak valid'),
@@ -56,7 +58,7 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
 
   const [cartRes, addressRes, profileRes, slotsRes, voucherRes] = await Promise.all([
     admin.from('cart_items').select('*, product:products(*)').eq('user_id', userId),
-    method === 'internal' && input.addressId
+    method !== 'pickup' && input.addressId
       ? admin.from('addresses').select('*').eq('id', input.addressId).eq('user_id', userId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     admin.from('profiles').select('id, full_name, phone').eq('id', userId).maybeSingle(),
@@ -70,7 +72,7 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
   if (cartItems.length === 0) throw new OrderError('CART_EMPTY', 'Keranjang kosong')
 
   const address = addressRes.data
-  if (method === 'internal' && !address) {
+  if (method !== 'pickup' && !address) {
     throw new OrderError('ADDRESS_NOT_FOUND', 'Alamat pengiriman tidak ditemukan')
   }
 
@@ -113,7 +115,7 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
   const timing = timingOf(slot)
 
   let distanceKm: number | null = null
-  if (method === 'internal' && address) {
+  if (method !== 'pickup' && address) {
     if (address.latitude == null || address.longitude == null) {
       throw new OrderError('NO_LOCATION', REASON_MESSAGES.NO_LOCATION, 409)
     }
@@ -136,6 +138,14 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
       ? (await getInternalLoads(admin, input.deliveryDate, settings.payment_hold_minutes))[slot.id] ?? 0
       : 0
 
+  // Grab: quote harus valid (milik user, alamat & isi cart sama, belum kedaluwarsa)
+  let grabQuote: { id: string; fee: number } | null = null
+  if (method === 'grab') {
+    if (!input.quoteId || !address) throw new OrderError('QUOTE_EXPIRED', 'Ongkir kedaluwarsa, hitung ulang', 409)
+    grabQuote = await loadValidQuote(userId, input.quoteId, address.id, cartItems)
+    if (!grabQuote) throw new OrderError('QUOTE_EXPIRED', 'Ongkir kedaluwarsa, hitung ulang', 409)
+  }
+
   const fulfillment = eligible(method, {
     distanceKm,
     cartFlags: Array.from(new Set(cartItems.flatMap((i) => i.product?.flags ?? []))),
@@ -145,6 +155,7 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
     now: new Date(),
     settings,
     internalLoad,
+    grabQuoteAvailable: method === 'grab' ? true : undefined,
   })
   if (!fulfillment.ok) {
     throw new OrderError(fulfillment.reason, REASON_MESSAGES[fulfillment.reason], 409)
@@ -154,7 +165,7 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
     throw new OrderError('PAYMENT_NOT_ALLOWED', 'Metode pembayaran tidak tersedia untuk pengiriman ini', 409)
   }
 
-  const shippingFee = method === 'internal' ? settings.internal_fee : 0
+  const shippingFee = method === 'grab' ? grabQuote!.fee : method === 'internal' ? settings.internal_fee : 0
 
   // Harga (perilaku saat ini dipertahankan: harga produk normal, tanpa promo, lihat K17)
   const subtotal = cartItems.reduce((acc, item) => acc + calculateCartItemTotal(item), 0)
@@ -208,6 +219,9 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
             village: address.village || '',
             postal_code: address.postal_code,
             notes: address.notes,
+            // Koordinat ikut disimpan: dipakai saat booking kurir online
+            latitude: address.latitude ?? null,
+            longitude: address.longitude ?? null,
           }
         : {
             label: 'Ambil di Toko',
@@ -242,6 +256,11 @@ export async function createOrder(userId: string, input: CreateOrderInput) {
     }
     console.error('create_order RPC error:', error)
     throw new OrderError('CREATE_FAILED', 'Gagal membuat pesanan', 500)
+  }
+
+  // Quote sekali pakai (best effort; kedaluwarsa sendiri dalam 15 menit)
+  if (grabQuote) {
+    await admin.from('shipping_quotes').delete().eq('id', grabQuote.id)
   }
 
   return data as { id: string; order_number: string; pickup_code: string | null }

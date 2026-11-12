@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { transitionOrder } from '@/lib/orders/transition'
+import { onOrderPaid } from '@/lib/orders/on-paid'
 import { formatPrice } from '@/lib/utils'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sayurku-psi.vercel.app'
@@ -125,6 +126,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    await onOrderPaid(adminSupabase, order.id)
 
     // Get user profile to send notification
     const { data: profile } = await adminSupabase
