@@ -19,10 +19,21 @@ function secretOk(request: NextRequest): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  if (!secretOk(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Biteship memeriksa URL saat pendaftaran dengan request body kosong dan mengharapkan 200.
+  // Request tanpa isi tidak mengubah apa pun, jadi dijawab 200 tanpa autentikasi.
+  // Event nyata (ada isi) tetap wajib melewati pemeriksaan secret di bawah.
+  const text = await request.text()
+  let payload: any = null
+  try {
+    payload = text.trim() ? JSON.parse(text) : null
+  } catch {
+    payload = null
+  }
+  if (!payload || typeof payload !== 'object' || Object.keys(payload).length === 0) {
+    return NextResponse.json({ received: true })
+  }
 
-  const payload = await request.json().catch(() => null)
-  if (!payload || typeof payload !== 'object') return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+  if (!secretOk(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const biteshipOrderId: string | null = payload.order_id ?? payload.id ?? null
   const db = createAdminClient()
@@ -64,4 +75,9 @@ export async function POST(request: NextRequest) {
     await finish(`error: ${(error as Error)?.message ?? 'unknown'}`.slice(0, 300))
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 })
   }
+}
+
+// Beberapa validator memakai GET/HEAD untuk memeriksa URL; jawab 200 tanpa data apa pun.
+export async function GET() {
+  return NextResponse.json({ ok: true })
 }
