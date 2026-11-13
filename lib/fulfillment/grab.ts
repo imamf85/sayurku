@@ -29,3 +29,14 @@ export function cartHash(items: { product_id: string; quantity: number }[]): str
     .join('|')
   return createHash('sha256').update(canonical).digest('hex')
 }
+
+/** Biteship mengembalikan durasi berbahasa Inggris ("1 - 3 Hours"); tampilkan dalam bahasa Indonesia. */
+export function formatDuration(text: string | null | undefined): string | null {
+  if (!text) return null
+  return text
+    .replace(/\bhours?\b/gi, 'jam')
+    .replace(/\bdays?\b/gi, 'hari')
+    .replace(/\b(minutes?|mins?)\b/gi, 'menit')
+    .replace(/\s*-\s*/g, ' - ')
+    .trim()
+}

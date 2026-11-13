@@ -116,13 +116,15 @@ export function CheckoutForm({
   const hasPin = selectedAddress?.latitude != null && selectedAddress?.longitude != null
   const distanceKm = useMemo(
     () =>
-      method !== 'pickup' && selectedAddress && hasPin
+      // Dihitung untuk semua metode: kelayakan Kurir/Grab bergantung pada jarak walau customer
+      // sedang memilih "Ambil di Toko" (bila tidak, kartu lain keliru dianggap "belum ada pin")
+      selectedAddress && hasPin
         ? haversineKm(
             { latitude: settings.store_latitude, longitude: settings.store_longitude },
             { latitude: selectedAddress.latitude!, longitude: selectedAddress.longitude! }
           )
         : null,
-    [method, selectedAddress, hasPin, settings.store_latitude, settings.store_longitude]
+    [selectedAddress, hasPin, settings.store_latitude, settings.store_longitude]
   )
 
   // Ongkir GrabExpress: hanya dihitung bila customer memilih Grab (hemat kuota Rates)

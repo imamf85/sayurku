@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectGrabService, computeGrabFee, cartHash } from './grab'
+import { selectGrabService, computeGrabFee, cartHash, formatDuration } from './grab'
 import { actionFor, normalizeStatus, orderStatusFor, isCancellable } from '@/lib/biteship/status'
 
 const limits = { grab_bike_max_grams: 20000, grab_car_max_grams: 150000 }
@@ -59,5 +59,14 @@ describe('status Biteship', () => {
     expect(isCancellable('pickingUp')).toBe(true)
     expect(isCancellable('picked')).toBe(false)
     expect(isCancellable('delivered')).toBe(false)
+  })
+})
+
+describe('formatDuration', () => {
+  it('menerjemahkan satuan waktu Biteship', () => {
+    expect(formatDuration('1 - 3 Hours')).toBe('1 - 3 jam')
+    expect(formatDuration('1-2 days')).toBe('1 - 2 hari')
+    expect(formatDuration('30 minutes')).toBe('30 menit')
+    expect(formatDuration(null)).toBeNull()
   })
 })

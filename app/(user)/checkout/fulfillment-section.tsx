@@ -3,6 +3,7 @@
 import { Bike, Loader2, Store, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { REASON_MESSAGES, type ReasonCode } from '@/lib/fulfillment/reasons'
+import { formatDuration } from '@/lib/fulfillment/grab'
 
 type Method = 'internal' | 'grab' | 'pickup'
 
@@ -61,7 +62,7 @@ export function FulfillmentSection({ method, onChange, reasons, internalFee, gra
                       <Loader2 className="h-3 w-3 animate-spin" /> Menghitung ongkir...
                     </span>
                   ) : selected && grab?.fee != null ? (
-                    `Rp ${grab.fee.toLocaleString('id-ID')}${grab.durationText ? ` · ${grab.durationText}` : ''}`
+                    `Rp ${grab.fee.toLocaleString('id-ID')}${formatDuration(grab.durationText) ? ` · ${formatDuration(grab.durationText)}` : ''}`
                   ) : (
                     'Kurir online · ongkir dihitung saat dipilih'
                   )
